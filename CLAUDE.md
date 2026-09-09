@@ -11,8 +11,10 @@ Full product spec lives in `docs/SPEC.md`. This file is the operating manual.
 
 ```bash
 pnpm dev          # next dev (turbopack)
-pnpm test         # vitest run — engine only, and that is the point
+pnpm test         # vitest run. Offline only: never calls the API, safe in CI.
 pnpm test:watch
+pnpm eval:parse   # the live extraction eval. Needs ANTHROPIC_API_KEY. ~13 Haiku calls,
+                  # well under a cent. Skipped by `pnpm test` so it never runs by accident.
 pnpm build        # must pass before any deploy
 pnpm lint
 ```
@@ -34,6 +36,10 @@ app/m/page.tsx          the model. Dynamic, not static: generateMetadata reads ?
 app/api/parse/route.ts  sentence -> params. The only paid call.
 app/api/og/route.tsx    the preview card. Engine-derived text only.
 lib/share.ts            what a link preview is allowed to say
+lib/parse.ts            prompt, extraction schema, salvage and normalisation. No network.
+lib/extract.ts          the one call that costs money. Route and eval share it, so the
+                        eval exercises the production path rather than a copy.
+lib/parse-cases.ts      the adversarial extraction set, plus its grader
 lib/engine.ts           project(), derive(). Pure. Zero imports. The predictive core.
 lib/schema.ts           Zod. Validates everything crossing a trust boundary.
 lib/url.ts              canonical encode/decode of ModelState. See docs/URL-CONTRACT.md.
@@ -47,33 +53,39 @@ components/*            SliderPanel, Assumptions, Verdict
    Money is rounded for display only, never inside the loop. Test it in isolation.
 2. **The AI never computes anything.** Claude Haiku is a *parser*: sentence in, six numbers
    out. Every number on screen comes from `engine.ts` arithmetic you can read in 20 lines.
-3. **Never invent a number, and never quietly change one.** If a field is not grounded in
+3. **The parser is checked, not trusted.** `normalizeParseResult` only catches a field the
+   model *admits* it could not ground; it cannot tell a confidently-wrong number from a right
+   one, and since the OG work that number lands on a card carrying our domain.
+   `lib/parse-cases.ts` is the check: growth rates not converted to counts, retention not read
+   as churn, annual prices divided, injected instructions ignored. Add a case whenever you
+   change the prompt.
+4. **Never invent a number, and never quietly change one.** If a field is not grounded in
    the user's sentence it goes in `missing[]` and the UI asks. A defensible default goes in
    `inferred[]`, travels in the URL as `i`, and renders a "we guessed this" badge — if that
    chain breaks anywhere the badge silently disappears, which is how it shipped broken once.
    Out-of-bounds input is **rejected with a per-field message** by `validateParams`, never
    clamped: a form showing 100% churn while the chart draws 99% is the same lie as inventing
    a number. `lib/engine.ts` owns `BOUNDS`; Zod refines against it rather than restating it.
-4. **Recompute is synchronous on every `input` event.** Not debounced, not deferred, not in
+5. **Recompute is synchronous on every `input` event.** Not debounced, not deferred, not in
    a transition. 24 iterations of six-op arithmetic is nothing. The curve must move while
    the finger is down. Only the *URL rewrite* is debounced (300ms).
-5. **The URL is the database, and posted links are an API.** All state round-trips through
+6. **The URL is the database, and posted links are an API.** All state round-trips through
    `?d=`. If something cannot be encoded in the URL, it is not state — it is a v0 scope
    violation. The v1 wire contract is frozen once a link is public: read
    `docs/URL-CONTRACT.md` before touching `lib/schema.ts`, the bounds in `lib/engine.ts`, or
    `encodeState`. Tightening a bound is a breaking change, because it turns live links into
    broken-link pages. `lib/contract.test.ts` holds a frozen golden payload; if it fails you
    have broken every link ever shared, and updating the literal is not the fix.
-6. **Cash is allowed to go negative and stays plotted.** Never clamp the y-domain at zero.
+7. **Cash is allowed to go negative and stays plotted.** Never clamp the y-domain at zero.
    Going negative is the entire point of the chart.
-7. **Churn is applied to the existing base before new customers are added**, so a customer
+8. **Churn is applied to the existing base before new customers are added**, so a customer
    acquired this month cannot churn this month. This is a modeling choice, not a fact, and
    it materially shifts the curve. It must stay visible in the assumptions list.
-8. **Preview cards carry engine output only.** `shareCard` takes `Params`, never
+9. **Preview cards carry engine output only.** `shareCard` takes `Params`, never
    `ModelState`, so the sentence and assumption strings written by whoever crafted the link
    cannot reach an unfurl on our domain. Keep that signature: it is what makes the guarantee
    structural instead of a thing someone has to remember.
-9. **Opening a shared link is read-write immediately.** No view mode, no gate, no modal
+10. **Opening a shared link is read-write immediately.** No view mode, no gate, no modal
    before the first slider move. Every gate costs fork rate, which is the only number
    being measured.
 
