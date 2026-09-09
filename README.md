@@ -1,36 +1,49 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Prime Radiant
 
-## Getting Started
+Type one sentence about your business, get a runnable cash model with sliders and a shareable
+link anyone can fork.
 
-First, run the development server:
+Codename only. Do not put "Prime Radiant" on a domain.
+
+## Run it
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+cp .env.example .env.local   # optional — see below
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The app works with **no environment variables at all**. Without `ANTHROPIC_API_KEY`, `/api/parse`
+returns `no_key` and the composer falls back to six manual number fields; everything downstream —
+the model, the chart, the sliders, the sharing, the forking — is identical, because none of it
+touches the API.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Effect when unset |
+|---|---|
+| `ANTHROPIC_API_KEY` | Sentence parsing is off; manual entry instead. |
+| `NEXT_PUBLIC_POSTHOG_KEY` | Analytics no-ops entirely. |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## What's where
 
-## Learn More
+```
+lib/engine.ts       the whole predictive core. Pure, zero imports, 100% of the arithmetic.
+lib/engine.test.ts  the tests that matter. If this is wrong, nothing else does.
+lib/url.ts          the database (it's the URL)
+lib/schema.ts       Zod, on everything crossing a trust boundary
+app/api/parse       sentence -> six numbers. The only cost surface.
+components/Chart    hand-rolled SVG, ~250 lines, no chart library
+```
 
-To learn more about Next.js, take a look at the following resources:
+Read `CLAUDE.md` before changing anything — it lists the eight invariants that make this
+product work. `docs/SPEC.md` is the full product spec, including what is deliberately *not*
+being built and the metric this is being judged on.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## The maths
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+customers = customers * (1 - churn) + newPerMonth
+revenue   = customers * price
+cash      = cash + revenue - burn
+```
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Run 24 times. That's it. Claude reads your sentence and never computes a number.

@@ -1,26 +1,136 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   Design tokens, lifted from the Figma file (Prime Radiant v0 — Runway
+   Simulator). The file defines no Figma variables, so these are the raw hex
+   values from the three frames, named here so nothing downstream hardcodes one.
+   --------------------------------------------------------------------------- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #fafaf8;
+  --surface: #ffffff;
+  /* Assumptions card, attribution strip, fork prompt. */
+  --surface-sunk: #f4f4f1;
+  --line: #e4e4e1;
+  --line-soft: #e7e7e3;
+
+  --ink: #14140f;
+  --ink-2: #6b6b63;
+  --ink-3: #a3a39c;
+
+  --accent: #0f6b5c;
+  --accent-soft: #0f6b5c12;
+  --danger: #c2410c;
+  --danger-soft: #c2410c0f;
+
+  /* The original curve on a fork, and its legend swatch. */
+  --ghost: #a3a39c;
+
+  --radius-card: 12px;
+  --radius-control: 8px;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-sunk: var(--surface-sunk);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-danger: var(--danger);
+  --color-ghost: var(--ghost);
+  --font-sans: var(--font-inter);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--paper);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------------------------------------------------------------------
+   Sliders. Native range inputs, restyled to the Figma track: 4px rail, ink fill
+   up to the thumb, 16px white thumb. A custom drag implementation would cost
+   keyboard access and pointer capture for nothing.
+
+   The fill is a gradient driven by --fill, set inline from the current value,
+   because a native range gives you no separately styleable "played" portion.
+   --------------------------------------------------------------------------- */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 18px;
+  background: transparent;
+  cursor: grab;
+}
+input[type="range"]:active {
+  cursor: grabbing;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--ink) 0 var(--fill, 0%),
+    var(--line) var(--fill, 0%) 100%
+  );
+}
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--ink) 0 var(--fill, 0%),
+    var(--line) var(--fill, 0%) 100%
+  );
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1.5px solid var(--ink);
+  box-shadow: 0 1px 2px rgb(20 20 15 / 0.18);
+  transition: transform 90ms ease;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1.5px solid var(--ink);
+  box-shadow: 0 1px 2px rgb(20 20 15 / 0.18);
+}
+input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.1);
+}
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
