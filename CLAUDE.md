@@ -28,8 +28,12 @@ libraries. All of these are documented in the spec as deferred. Do not "just add
 ## Architecture
 
 ```
-app/page.tsx            empty state + model state, one page, three visual states not three routes
-app/api/parse/route.ts  sentence -> params. The only cost surface.
+app/page.tsx            empty state, one page
+app/m/page.tsx          the model. Dynamic, not static: generateMetadata reads ?d= so every
+                        shared link unfurls with its own verdict.
+app/api/parse/route.ts  sentence -> params. The only paid call.
+app/api/og/route.tsx    the preview card. Engine-derived text only.
+lib/share.ts            what a link preview is allowed to say
 lib/engine.ts           project(), derive(). Pure. Zero imports. The predictive core.
 lib/schema.ts           Zod. Validates everything crossing a trust boundary.
 lib/url.ts              encode/decode ModelState to base64url
@@ -60,7 +64,11 @@ components/*            SliderPanel, Assumptions, Verdict
 7. **Churn is applied to the existing base before new customers are added**, so a customer
    acquired this month cannot churn this month. This is a modeling choice, not a fact, and
    it materially shifts the curve. It must stay visible in the assumptions list.
-8. **Opening a shared link is read-write immediately.** No view mode, no gate, no modal
+8. **Preview cards carry engine output only.** `shareCard` takes `Params`, never
+   `ModelState`, so the sentence and assumption strings written by whoever crafted the link
+   cannot reach an unfurl on our domain. Keep that signature: it is what makes the guarantee
+   structural instead of a thing someone has to remember.
+9. **Opening a shared link is read-write immediately.** No view mode, no gate, no modal
    before the first slider move. Every gate costs fork rate, which is the only number
    being measured.
 
