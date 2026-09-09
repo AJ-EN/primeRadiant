@@ -5,8 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { sanitizeParams, type Params } from '@/lib/engine';
 import { PARAM_KEYS, type ParamKey, type ParseResult } from '@/lib/schema';
 import type { ModelState } from '@/lib/schema';
-import { stateToPath } from '@/lib/url';
-import { initAnalytics, track } from '@/lib/analytics';
+import { fingerprint, stateToPath } from '@/lib/url';
+import { initAnalytics, markSelfAuthored, track } from '@/lib/analytics';
 
 const EXAMPLES = [
   {
@@ -77,14 +77,18 @@ export default function Composer() {
   }, []);
 
   function go(params: Params, assumptions: string[]) {
-    const state: ModelState = {
-      v: 1,
-      s: sentence.trim(),
-      p: sanitizeParams(params),
-      a: assumptions.slice(0, 8),
-    };
-    track('model_created');
-    router.push(`${stateToPath(state)}&new=1`);
+    const p = sanitizeParams(params);
+    const state: ModelState = { v: 1, s: sentence.trim(), p, a: assumptions.slice(0, 8) };
+
+    // Origin is recorded in sessionStorage, never in the URL. A `new=1` flag was erased by
+    // the model page's own debounced replaceState 300ms later, so every reload reclassified
+    // the author as an inbound visitor and inflated the kill metric's denominator. It would
+    // also leak into any link copied by hand from the address bar.
+    markSelfAuthored(fingerprint(p));
+
+    // `model_created` is fired by the page that renders the model. Firing it here too
+    // double-counted the top of the funnel and halved every rate computed from it.
+    router.push(stateToPath(state));
   }
 
   async function onSubmit(e: React.FormEvent) {

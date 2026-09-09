@@ -15,7 +15,12 @@ import { changedParams, decodeState, fingerprint, stateToPath } from '@/lib/url'
 import { resolveSliders } from '@/lib/sliders';
 import { headline } from '@/lib/verdict';
 import { money } from '@/lib/format';
-import { initAnalytics, track, trackOnce } from '@/lib/analytics';
+import {
+  initAnalytics,
+  markSelfAuthored,
+  trackSessionOnce,
+  useSelfAuthored,
+} from '@/lib/analytics';
 import TopBar from './TopBar';
 import Chart from './Chart';
 import SliderPanel from './SliderPanel';
@@ -27,17 +32,13 @@ export default function ModelClient() {
   const sp = useSearchParams();
   // Read the URL exactly once. From here on this component owns the state and rewrites the
   // URL itself; re-reading would mean fighting our own replaceState.
-  const [boot] = useState(() => ({
-    state: decodeState(sp.get('d')),
-    /** `new=1` is set only by our own composer, so its absence means somebody shared this. */
-    fromLink: sp.get('new') !== '1',
-  }));
+  const [initial] = useState(() => decodeState(sp.get('d')));
 
-  if (!boot.state) return <BrokenLink />;
-  return <Model initial={boot.state} fromLink={boot.fromLink} />;
+  if (!initial) return <BrokenLink />;
+  return <Model initial={initial} />;
 }
 
-function Model({ initial, fromLink }: { initial: ModelState; fromLink: boolean }) {
+function Model({ initial }: { initial: ModelState }) {
   const months = DEFAULT_MONTHS;
 
   /** The model as it was shared. A fork of a fork still points at the true original. */
@@ -46,9 +47,23 @@ function Model({ initial, fromLink }: { initial: ModelState; fromLink: boolean }
   const [params, setParams] = useState<Params>(initial.p);
   const [toast, setToast] = useState<string | null>(null);
 
+
+  /** Numerator and denominator must share a scope or the ratio compares different things. */
+  const scope = useMemo(() => fingerprint(initial.p), [initial]);
+
+  /**
+   * "Did somebody else send me this?" Answered from sessionStorage, which our own
+   * replaceState cannot erase and a pasted URL cannot carry. The old `new=1` query flag was
+   * stripped by the 300ms URL rewrite, so reloading a model you just built counted as an
+   * inbound share and inflated the kill metric's denominator. null until knowable, so the
+   * origin-dependent chrome waits a tick rather than flashing the wrong state.
+   */
+  const self = useSelfAuthored(scope);
+  const fromLink = self === null ? null : !self;
+
   const changed = useMemo(() => changedParams(originParams, params), [originParams, params]);
   const diverged = changed.length > 0;
-  const isFork = fromLink && diverged;
+  const isFork = fromLink === true && diverged;
 
   // Domains are fixed per session and expand off the parsed value, never off the live one,
   // so the track under your thumb does not rescale while you drag (SPEC 7.1).
@@ -73,21 +88,27 @@ function Model({ initial, fromLink }: { initial: ModelState; fromLink: boolean }
     [initial, params, isFork, originParams],
   );
 
+  // Fires as soon as origin is knowable. trackSessionOnce is idempotent per tab per model,
+  // so re-running this effect cannot double-count.
   useEffect(() => {
     initAnalytics();
-    if (fromLink) track('link_opened', { f: initial.f ?? fingerprint(initial.p) });
-    else track('model_created', { f: fingerprint(initial.p) });
-    // Mount only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (self === null) return;
+    if (self) trackSessionOnce('model_created', scope, { f: scope });
+    else trackSessionOnce('link_opened', scope, { f: initial.f ?? scope });
+  }, [self, scope, initial.f]);
 
   // The URL rewrite IS debounced, so dragging does not spam history.
   useEffect(() => {
     const t = setTimeout(() => {
+      // Once you diverge, the URL describes a model you made, so claim authorship of it.
+      // Without this, reloading your own fork counted as somebody opening a shared link and
+      // added a denominator the fork rate never earned. Only on divergence: the model as it
+      // arrived stays somebody else's.
+      if (diverged) markSelfAuthored(fingerprint(params));
       window.history.replaceState(null, '', stateToPath(state));
     }, 300);
     return () => clearTimeout(t);
-  }, [state]);
+  }, [state, diverged, params]);
 
   useEffect(() => {
     if (!toast) return;
@@ -97,10 +118,10 @@ function Model({ initial, fromLink }: { initial: ModelState; fromLink: boolean }
 
   const onChange = useCallback(
     (key: keyof Params, value: number) => {
-      trackOnce('slider_moved', { from_link: fromLink });
+      trackSessionOnce('slider_moved', scope, { from_link: fromLink === true });
       setParams((prev) => ({ ...prev, [key]: value }));
     },
-    [fromLink],
+    [fromLink, scope],
   );
 
   const shareUrl = useCallback(() => `${window.location.origin}${stateToPath(state)}`, [state]);
@@ -112,18 +133,31 @@ function Model({ initial, fromLink }: { initial: ModelState; fromLink: boolean }
     } catch {
       setToast('Copy blocked — the link is in your address bar');
     }
-    if (diverged) track('fork_saved', { from_link: fromLink, changed });
-  }, [shareUrl, diverged, fromLink, changed]);
+    // Keyed on the fork's own fingerprint: copying then posting the same version is one
+    // fork, but genuinely different forks in the same tab each count.
+    if (diverged) {
+      trackSessionOnce('fork_saved', fingerprint(params), {
+        from_link: fromLink === true,
+        changed,
+      });
+    }
+  }, [shareUrl, diverged, fromLink, changed, params]);
 
   const onShare = useCallback(() => {
     const text = `${headline(derived, months)}\n\nHere are the assumptions. Tell me which one is wrong:`;
-    if (diverged) track('fork_saved', { from_link: fromLink, changed, via: 'share' });
+    if (diverged) {
+      trackSessionOnce('fork_saved', fingerprint(params), {
+        from_link: fromLink === true,
+        changed,
+        via: 'share',
+      });
+    }
     window.open(
       `https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl())}`,
       '_blank',
       'noopener,noreferrer',
     );
-  }, [shareUrl, derived, months, diverged, fromLink, changed]);
+  }, [shareUrl, derived, months, diverged, fromLink, changed, params]);
 
   /**
    * Not a gate. The model is already editable — this only puts the reader's cursor on the
@@ -140,7 +174,7 @@ function Model({ initial, fromLink }: { initial: ModelState; fromLink: boolean }
     <>
       <TopBar>
         {toast && <span className="mr-1 text-[12px] text-ink-3">{toast}</span>}
-        {fromLink && !diverged ? (
+        {fromLink === null ? null : fromLink && !diverged ? (
           <button
             type="button"
             onClick={jumpToSliders}
@@ -169,7 +203,7 @@ function Model({ initial, fromLink }: { initial: ModelState; fromLink: boolean }
       </TopBar>
 
       <main className="mx-auto flex w-full max-w-[1280px] flex-col gap-5 px-10 py-8">
-        {fromLink && <AttributionStrip />}
+        {fromLink === true && <AttributionStrip />}
 
         {initial.s && (
           <div className="rounded-[8px] border border-line bg-surface px-4 py-3">
@@ -246,7 +280,7 @@ function Model({ initial, fromLink }: { initial: ModelState; fromLink: boolean }
 
         <Assumptions params={params} sliders={sliders} months={months} />
 
-        {fromLink && <ForkPrompt onShare={onShare} />}
+        {fromLink === true && <ForkPrompt onShare={onShare} />}
       </main>
     </>
   );
