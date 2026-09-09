@@ -17,10 +17,31 @@ import { decodeState } from '@/lib/url';
  * The cost is a function invocation per link open instead of a CDN hit. At validation volume
  * that is free, the work is pure arithmetic with no I/O, and it also kills the blank shell.
  */
+/**
+ * Shown when the payload is missing, mangled, or over the byte budget. It still carries a
+ * card: a truncated link is somebody's broken share, and it lands in exactly the channel
+ * this product depends on, so a bare unadorned URL is the worst possible outcome there.
+ * `/api/og` with no payload renders the generic version.
+ */
+const FALLBACK_TITLE = 'A runway model you can argue with';
+const FALLBACK_DESCRIPTION =
+  'One sentence about your business becomes a live cash model with every assumption on the page.';
+
 const FALLBACK: Metadata = {
-  title: 'A runway model you can argue with',
-  description:
-    'One sentence about your business becomes a live cash model with every assumption on the page.',
+  title: FALLBACK_TITLE,
+  description: FALLBACK_DESCRIPTION,
+  openGraph: {
+    type: 'website',
+    title: FALLBACK_TITLE,
+    description: FALLBACK_DESCRIPTION,
+    images: [{ url: '/api/og', width: 1200, height: 630, alt: FALLBACK_TITLE }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: FALLBACK_TITLE,
+    description: FALLBACK_DESCRIPTION,
+    images: ['/api/og'],
+  },
 };
 
 export async function generateMetadata({

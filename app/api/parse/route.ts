@@ -1,7 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
-import { PARAM_KEYS, ParseResultSchema, normalizeParseResult } from '@/lib/schema';
+import {
+  PARAM_KEYS,
+  ParseResultSchema,
+  SENTENCE_MAX,
+  normalizeParseResult,
+} from '@/lib/schema';
 
 /** The only cost surface in the product. Everything else is arithmetic in the browser. */
 export const runtime = 'nodejs';
@@ -23,7 +28,7 @@ Rules:
 - newPerMonth is an ABSOLUTE count of new customers per month. If the sentence gives a growth RATE instead ("growing 20% a month"), you cannot convert it: return null and put "newPerMonth" in "missing".
 - price is revenue per customer per month. If a sentence gives an annual price, divide by 12 and say so in an assumption.
 - "inferred" lists keys you filled with a defensible default rather than read from the sentence. A key cannot be in both "missing" and "inferred".
-- "assumptions" are 3 to 5 plain English sentences a non-technical founder could read and disagree with. Name the specific numbers. Do not hedge, do not add caveats about the model itself, do not mention that you are an AI.
+- "assumptions" are 3 to 5 plain English sentences, each under 140 characters, that a non-technical founder could read and disagree with. Name the specific numbers. Do not hedge, do not add caveats about the model itself, do not mention that you are an AI.
 
 Return every one of the six numeric keys, using null where the sentence does not ground them.`;
 
@@ -93,7 +98,8 @@ export async function POST(req: Request) {
     return Response.json({ ok: false, reason: 'bad_input' }, { status: 400 });
   }
 
-  if (sentence.length < 8 || sentence.length > 600) {
+  // Matches the wire limit: parsing more than the URL can carry just wastes a call.
+  if (sentence.length < 8 || sentence.length > SENTENCE_MAX) {
     return Response.json({ ok: false, reason: 'bad_input' }, { status: 400 });
   }
 

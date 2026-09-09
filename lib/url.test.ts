@@ -54,7 +54,9 @@ describe('encode / decode', () => {
 
   it('carries the inferred list, or the badge it drives is decorative', () => {
     const guessed: ModelState = { ...STATE, i: ['churn', 'customers'] };
-    expect(decodeState(encodeState(guessed))?.i).toEqual(['churn', 'customers']);
+    // Canonicalised into engine key order: which fields were guessed is a set, so the two
+    // orderings are the same model and must produce the same URL. See lib/contract.test.ts.
+    expect(decodeState(encodeState(guessed))?.i).toEqual(['customers', 'churn']);
   });
 
   it('omits the inferred list when nothing was guessed, to keep the payload short', () => {

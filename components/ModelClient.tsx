@@ -81,7 +81,13 @@ function Model({ initial }: { initial: ModelState }) {
       // Must be re-emitted, or the debounced rewrite quietly drops it 300ms after load and
       // every shared link loses the badge that says which numbers were guessed.
       ...(initial.i && initial.i.length > 0 ? { i: initial.i } : {}),
-      ...(isFork ? { o: originParams, f: initial.f ?? fingerprint(originParams) } : {}),
+      // Keep the lineage if it arrived with one, not only once this tab diverges. Opening
+      // somebody's fork and re-sharing it untouched used to strip `o` and `f` on the 300ms
+      // rewrite, so the ghost curve and the diff vanished and any later edit would diff
+      // against the fork instead of the original it came from.
+      ...(initial.o || isFork
+        ? { o: originParams, f: initial.f ?? fingerprint(originParams) }
+        : {}),
     }),
     [initial, params, isFork, originParams],
   );

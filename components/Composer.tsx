@@ -8,7 +8,13 @@ import {
   type ParamKey,
   type Params,
 } from '@/lib/engine';
-import { PARAM_KEYS, type ModelState, type ParseResult } from '@/lib/schema';
+import {
+  ASSUMPTION_COUNT_MAX,
+  PARAM_KEYS,
+  SENTENCE_MAX,
+  type ModelState,
+  type ParseResult,
+} from '@/lib/schema';
 import { fingerprint, stateToPath } from '@/lib/url';
 import { initAnalytics, markSelfAuthored, track } from '@/lib/analytics';
 
@@ -105,7 +111,7 @@ export default function Composer() {
       v: 1,
       s: sentence.trim(),
       p: params,
-      a: assumptions.slice(0, 8),
+      a: assumptions.slice(0, ASSUMPTION_COUNT_MAX),
       // Omitted when empty so an honest model does not pay for the field in URL bytes.
       ...(inferred.length > 0 ? { i: inferred } : {}),
     };
@@ -327,11 +333,18 @@ export default function Composer() {
           }}
           rows={2}
           disabled={busy}
+          // Capped at exactly what the URL can carry, so a sentence is never silently
+          // shortened after the fact. Typing stops where storage stops.
+          maxLength={SENTENCE_MAX}
           placeholder="18k in the bank, 9.5k a month burn, 12 customers paying 400, about 8% churn, 2 new customers a month"
           className="w-full resize-none bg-transparent text-[17px] leading-[28px] text-ink outline-none placeholder:text-ink-3 disabled:opacity-60"
         />
         <div className="flex items-center justify-between">
-          <span className="text-[13px] text-ink-3">No account needed</span>
+          <span className="text-[13px] text-ink-3">
+            {sentence.length > SENTENCE_MAX * 0.8
+              ? `${SENTENCE_MAX - sentence.length} characters left`
+              : 'No account needed'}
+          </span>
           <button
             type="submit"
             disabled={busy || sentence.trim().length < 8}

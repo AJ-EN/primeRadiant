@@ -36,7 +36,7 @@ app/api/og/route.tsx    the preview card. Engine-derived text only.
 lib/share.ts            what a link preview is allowed to say
 lib/engine.ts           project(), derive(). Pure. Zero imports. The predictive core.
 lib/schema.ts           Zod. Validates everything crossing a trust boundary.
-lib/url.ts              encode/decode ModelState to base64url
+lib/url.ts              canonical encode/decode of ModelState. See docs/URL-CONTRACT.md.
 components/Chart.tsx    hand-rolled SVG
 components/*            SliderPanel, Assumptions, Verdict
 ```
@@ -57,8 +57,13 @@ components/*            SliderPanel, Assumptions, Verdict
 4. **Recompute is synchronous on every `input` event.** Not debounced, not deferred, not in
    a transition. 24 iterations of six-op arithmetic is nothing. The curve must move while
    the finger is down. Only the *URL rewrite* is debounced (300ms).
-5. **The URL is the database.** All state round-trips through `?d=`. If something cannot be
-   encoded in the URL, it is not state — it is a v0 scope violation.
+5. **The URL is the database, and posted links are an API.** All state round-trips through
+   `?d=`. If something cannot be encoded in the URL, it is not state — it is a v0 scope
+   violation. The v1 wire contract is frozen once a link is public: read
+   `docs/URL-CONTRACT.md` before touching `lib/schema.ts`, the bounds in `lib/engine.ts`, or
+   `encodeState`. Tightening a bound is a breaking change, because it turns live links into
+   broken-link pages. `lib/contract.test.ts` holds a frozen golden payload; if it fails you
+   have broken every link ever shared, and updating the literal is not the fix.
 6. **Cash is allowed to go negative and stays plotted.** Never clamp the y-domain at zero.
    Going negative is the entire point of the chart.
 7. **Churn is applied to the existing base before new customers are added**, so a customer
