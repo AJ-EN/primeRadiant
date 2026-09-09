@@ -2,9 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { sanitizeParams, type Params } from '@/lib/engine';
-import { PARAM_KEYS, type ParamKey, type ParseResult } from '@/lib/schema';
-import type { ModelState } from '@/lib/schema';
+import {
+  validateParams,
+  type FieldIssue,
+  type ParamKey,
+  type Params,
+} from '@/lib/engine';
+import { PARAM_KEYS, type ModelState, type ParseResult } from '@/lib/schema';
 import { fingerprint, stateToPath } from '@/lib/url';
 import { initAnalytics, markSelfAuthored, track } from '@/lib/analytics';
 
@@ -44,6 +48,24 @@ const PREFIX: Partial<Record<ParamKey, string>> = {
 const SUFFIX: Partial<Record<ParamKey, string>> = { churn: '%' };
 
 /**
+ * "I don't know" is only offered where a default is genuinely defensible, and the reason is
+ * shown before you accept it. The money fields have no honest default: if you cannot say
+ * what you have in the bank, there is no runway model to draw, and inventing one is the
+ * exact failure this product exists to avoid. Anything taken from here is flagged as a
+ * guess for the life of the model.
+ */
+const UNKNOWN_DEFAULTS: Partial<Record<ParamKey, { value: number; because: string }>> = {
+  churn: {
+    value: 0.05,
+    because: '5% a month, a common early-stage subscription figure',
+  },
+  customers: {
+    value: 0,
+    because: 'zero, on the assumption nobody is paying you yet',
+  },
+};
+
+/**
  * One note per failure, and each one has to be true. Telling someone their sentence could not
  * be read when the parser was never called is the same confidently-wrong move the whole
  * product exists to avoid.
@@ -71,23 +93,23 @@ export default function Composer() {
   const [sentence, setSentence] = useState(() => sp.get('s') ?? '');
   const [stage, setStage] = useState<Stage>({ kind: 'idle' });
   const [drafts, setDrafts] = useState<Partial<Record<ParamKey, string>>>({});
+  const [unknowns, setUnknowns] = useState<ParamKey[]>([]);
+  const [issues, setIssues] = useState<FieldIssue[]>([]);
 
   useEffect(() => {
     initAnalytics();
   }, []);
 
-  function go(params: Params, assumptions: string[]) {
-    const p = sanitizeParams(params);
-    const state: ModelState = { v: 1, s: sentence.trim(), p, a: assumptions.slice(0, 8) };
-
-    // Origin is recorded in sessionStorage, never in the URL. A `new=1` flag was erased by
-    // the model page's own debounced replaceState 300ms later, so every reload reclassified
-    // the author as an inbound visitor and inflated the kill metric's denominator. It would
-    // also leak into any link copied by hand from the address bar.
-    markSelfAuthored(fingerprint(p));
-
-    // `model_created` is fired by the page that renders the model. Firing it here too
-    // double-counted the top of the funnel and halved every rate computed from it.
+  function go(params: Params, assumptions: string[], inferred: ParamKey[]) {
+    const state: ModelState = {
+      v: 1,
+      s: sentence.trim(),
+      p: params,
+      a: assumptions.slice(0, 8),
+      // Omitted when empty so an honest model does not pay for the field in URL bytes.
+      ...(inferred.length > 0 ? { i: inferred } : {}),
+    };
+    markSelfAuthored(fingerprint(params));
     router.push(stateToPath(state));
   }
 
@@ -118,34 +140,64 @@ export default function Composer() {
         return;
       }
 
-      go(result as unknown as Params, result.assumptions);
+      const validated = validateParams(result as unknown as Partial<Record<ParamKey, unknown>>);
+      if (!validated.ok) {
+        // The parser produced a number outside the bounds. Do not repair it, ask.
+        track('parse_failed', { reason: 'out_of_bounds' });
+        setStage({ kind: 'clarify', result, keys: validated.issues.map((i) => i.key) });
+        setIssues(validated.issues);
+        return;
+      }
+      go(validated.params, result.assumptions, result.inferred);
     } catch {
       track('parse_failed', { reason: 'network' });
       setStage({ kind: 'manual', note: NOTES.network });
     }
   }
 
-  function readDraft(k: ParamKey): number {
-    const raw = Number(drafts[k] ?? 0) || 0;
-    return k === 'churn' ? raw / 100 : raw;
+  /** Percent in the field, decimal in the model. Unknown fields use the stated default. */
+  function readField(k: ParamKey): unknown {
+    if (unknowns.includes(k)) return UNKNOWN_DEFAULTS[k]?.value;
+    const raw = drafts[k];
+    if (raw === undefined || raw.trim() === '') return undefined;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return raw;
+    return k === 'churn' ? n / 100 : n;
+  }
+
+  function toggleUnknown(k: ParamKey) {
+    setUnknowns((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
+    setIssues((prev) => prev.filter((i) => i.key !== k));
   }
 
   function onFieldsSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (stage.kind === 'clarify') {
-      const filled = { ...stage.result } as Record<string, unknown>;
-      for (const k of stage.keys) filled[k] = readDraft(k);
-      go(filled as unknown as Params, stage.result.assumptions);
-    } else {
-      const p = Object.fromEntries(PARAM_KEYS.map((k) => [k, readDraft(k)]));
-      go(p as unknown as Params, []);
+    if (stage.kind !== 'clarify' && stage.kind !== 'manual') return;
+
+    const asked = stage.kind === 'clarify' ? stage.keys : [...PARAM_KEYS];
+    const base: Partial<Record<ParamKey, unknown>> =
+      stage.kind === 'clarify'
+        ? Object.fromEntries(PARAM_KEYS.map((k) => [k, (stage.result as Record<string, unknown>)[k]]))
+        : {};
+
+    for (const k of asked) base[k] = readField(k);
+
+    const validated = validateParams(base);
+    if (!validated.ok) {
+      setIssues(validated.issues);
+      return;
     }
+
+    // Everything the parser defaulted, plus everything the reader said they did not know.
+    const parserInferred = stage.kind === 'clarify' ? stage.result.inferred : [];
+    const inferred = [...new Set<ParamKey>([...parserInferred, ...unknowns])];
+    go(validated.params, stage.kind === 'clarify' ? stage.result.assumptions : [], inferred);
   }
 
   if (stage.kind === 'clarify' || stage.kind === 'manual') {
     const keys = stage.kind === 'clarify' ? stage.keys : [...PARAM_KEYS];
     return (
-      <form onSubmit={onFieldsSubmit} className="flex w-full flex-col gap-5">
+      <form onSubmit={onFieldsSubmit} className="flex w-full flex-col gap-5" noValidate>
         <p className="text-[11px] font-semibold tracking-[1.1px] text-ink-3">STEP 2</p>
         <h1 className="text-[38px] leading-[46px] font-semibold tracking-[-0.76px] text-ink">
           {stage.kind === 'clarify'
@@ -160,30 +212,75 @@ export default function Composer() {
             : stage.note}
         </p>
 
-        <div className="flex flex-col gap-3.5 rounded-[10px] border-[1.5px] border-ink bg-surface px-5 py-[18px]">
-          {keys.map((k) => (
-            <div key={k} className="flex flex-wrap items-center justify-between gap-3">
-              <label htmlFor={`f-${k}`} className="text-[14px] text-ink">
-                {QUESTIONS[k]}
-              </label>
-              <div className="flex items-center gap-1.5 rounded-[8px] border border-line bg-paper px-3 focus-within:border-ink">
-                {PREFIX[k] && <span className="text-[15px] text-ink-3">{PREFIX[k]}</span>}
-                <input
-                  id={`f-${k}`}
-                  type="number"
-                  min={0}
-                  step="any"
-                  inputMode="decimal"
-                  autoFocus={k === keys[0]}
-                  value={drafts[k] ?? ''}
-                  onChange={(e) => setDrafts((d) => ({ ...d, [k]: e.target.value }))}
-                  className="w-28 bg-transparent py-2 text-right text-[15px] font-semibold text-ink outline-none"
-                  style={{ fontVariantNumeric: 'tabular-nums' }}
-                />
-                {SUFFIX[k] && <span className="text-[15px] text-ink-3">{SUFFIX[k]}</span>}
+        <div className="flex flex-col gap-5 rounded-[10px] border-[1.5px] border-ink bg-surface px-5 py-[18px]">
+          {keys.map((k) => {
+            const unknown = unknowns.includes(k);
+            const fallback = UNKNOWN_DEFAULTS[k];
+            const issue = issues.find((i) => i.key === k);
+            return (
+              <div key={k} className="flex flex-col gap-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <label htmlFor={`f-${k}`} className="text-[14px] text-ink">
+                    {QUESTIONS[k]}
+                  </label>
+                  <div
+                    className={`flex items-center gap-1.5 rounded-[8px] border bg-paper px-3 focus-within:border-ink ${
+                      issue ? 'border-danger' : 'border-line'
+                    } ${unknown ? 'opacity-40' : ''}`}
+                  >
+                    {PREFIX[k] && <span className="text-[15px] text-ink-3">{PREFIX[k]}</span>}
+                    <input
+                      id={`f-${k}`}
+                      type="number"
+                      min={0}
+                      step="any"
+                      inputMode="decimal"
+                      disabled={unknown}
+                      autoFocus={k === keys[0]}
+                      aria-invalid={issue ? true : undefined}
+                      aria-describedby={issue ? `err-${k}` : undefined}
+                      value={unknown ? '' : (drafts[k] ?? '')}
+                      onChange={(e) => {
+                        setDrafts((d) => ({ ...d, [k]: e.target.value }));
+                        setIssues((prev) => prev.filter((i) => i.key !== k));
+                      }}
+                      className="w-28 bg-transparent py-2 text-right text-[15px] font-semibold text-ink outline-none"
+                      style={{ fontVariantNumeric: 'tabular-nums' }}
+                    />
+                    {SUFFIX[k] && <span className="text-[15px] text-ink-3">{SUFFIX[k]}</span>}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                  {fallback ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleUnknown(k)}
+                      className="cursor-pointer text-[12px] font-medium text-accent"
+                    >
+                      {unknown ? 'Actually, I know this' : "I don't know"}
+                    </button>
+                  ) : (
+                    <span className="text-[12px] text-ink-3">
+                      There is no honest default for this one.
+                    </span>
+                  )}
+                  {issue && (
+                    <span id={`err-${k}`} role="alert" className="text-[12px] font-medium text-danger">
+                      {issue.message}
+                    </span>
+                  )}
+                </div>
+
+                {unknown && fallback && (
+                  <p className="text-[12px] leading-[18px] text-ink-2">
+                    Using {fallback.because}. It carries a “we guessed this” badge on the model,
+                    so anyone reading it knows the number came from us and not from you.
+                  </p>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="flex items-center gap-4">
@@ -195,7 +292,10 @@ export default function Composer() {
           </button>
           <button
             type="button"
-            onClick={() => setStage({ kind: 'idle' })}
+            onClick={() => {
+              setStage({ kind: 'idle' });
+              setIssues([]);
+            }}
             className="cursor-pointer text-[13px] text-ink-3 hover:text-ink-2"
           >
             Back to the sentence

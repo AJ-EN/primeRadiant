@@ -43,9 +43,13 @@ components/*            SliderPanel, Assumptions, Verdict
    Money is rounded for display only, never inside the loop. Test it in isolation.
 2. **The AI never computes anything.** Claude Haiku is a *parser*: sentence in, six numbers
    out. Every number on screen comes from `engine.ts` arithmetic you can read in 20 lines.
-3. **Never invent a number.** If a field is not grounded in the user's sentence it goes in
-   `missing[]` and the UI asks. A defensible default goes in `inferred[]` and is flagged
-   visually. This costs a little magic and buys the entire credibility of the product.
+3. **Never invent a number, and never quietly change one.** If a field is not grounded in
+   the user's sentence it goes in `missing[]` and the UI asks. A defensible default goes in
+   `inferred[]`, travels in the URL as `i`, and renders a "we guessed this" badge — if that
+   chain breaks anywhere the badge silently disappears, which is how it shipped broken once.
+   Out-of-bounds input is **rejected with a per-field message** by `validateParams`, never
+   clamped: a form showing 100% churn while the chart draws 99% is the same lie as inventing
+   a number. `lib/engine.ts` owns `BOUNDS`; Zod refines against it rather than restating it.
 4. **Recompute is synchronous on every `input` event.** Not debounced, not deferred, not in
    a transition. 24 iterations of six-op arithmetic is nothing. The curve must move while
    the finger is down. Only the *URL rewrite* is debounced (300ms).

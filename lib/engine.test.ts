@@ -3,11 +3,11 @@ import {
   project,
   derive,
   model,
-  sanitizeParams,
+  validateParams,
   ceilingCustomers,
   ceilingRevenue,
   breakevenMonth,
-  MAX_CHURN,
+  BOUNDS,
   type Params,
 } from './engine';
 
@@ -172,28 +172,89 @@ describe('derive', () => {
   });
 });
 
-describe('sanitizeParams', () => {
-  it('clamps churn to [0, 0.99] so the ceiling is always defined', () => {
-    expect(sanitizeParams({ churn: 1 }).churn).toBe(MAX_CHURN);
-    expect(sanitizeParams({ churn: 4.2 }).churn).toBe(MAX_CHURN);
-    expect(sanitizeParams({ churn: -0.5 }).churn).toBe(0);
+describe('churn at exactly 1', () => {
+  // SPEC 3.4 justified a 0.99 clamp by claiming the ceiling is undefined here. It is not:
+  // the fixed point of c = c(1 - churn) + n at churn = 1 is exactly n.
+  const total: Params = { ...SPEC, churn: 1, newPerMonth: 5 };
+
+  it('has a defined ceiling equal to the monthly signups', () => {
+    expect(ceilingCustomers(total)).toBe(5);
+    expect(Number.isFinite(ceilingCustomers(total))).toBe(true);
   });
 
-  it('floors negatives and replaces junk from a hand-edited URL', () => {
-    const p = sanitizeParams({
-      startingCash: -5000,
-      monthlyBurn: NaN,
-      customers: -3,
-      price: Infinity as number,
-      newPerMonth: undefined,
-    });
-    expect(p).toEqual({
-      startingCash: 0,
-      monthlyBurn: 0,
-      customers: 0,
-      price: 0,
-      churn: 0,
-      newPerMonth: 0,
-    });
+  it('is reached by the loop immediately and stays there', () => {
+    const pts = project(total, 6);
+    expect(pts[1].customers).toBe(5);
+    expect(pts[6].customers).toBe(5);
+  });
+
+  it('produces no NaN anywhere in the derived facts', () => {
+    for (const v of Object.values(model(total).derived)) {
+      expect(typeof v === 'number' ? Number.isNaN(v) : false).toBe(false);
+    }
+  });
+});
+
+describe('validateParams', () => {
+  const valid = { ...SPEC };
+
+  it('accepts params inside the bounds and returns them unchanged', () => {
+    const result = validateParams(valid);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.params).toEqual(valid);
+  });
+
+  it('accepts churn of exactly 1 rather than quietly computing 0.99', () => {
+    const result = validateParams({ ...valid, churn: 1 });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.params.churn).toBe(1);
+  });
+
+  it('rejects churn above 1 instead of clamping it', () => {
+    const result = validateParams({ ...valid, churn: 4.2 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues).toHaveLength(1);
+      expect(result.issues[0].key).toBe('churn');
+      expect(result.issues[0].message).toContain('100%');
+    }
+  });
+
+  it('rejects negatives instead of flooring them to zero', () => {
+    const result = validateParams({ ...valid, startingCash: -5000 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues[0].key).toBe('startingCash');
+      expect(result.issues[0].message).toContain('negative');
+    }
+  });
+
+  it('rejects junk instead of substituting zero', () => {
+    for (const bad of [NaN, Infinity, undefined, null, '400', {}]) {
+      const result = validateParams({ ...valid, price: bad as number });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.issues[0].key).toBe('price');
+    }
+  });
+
+  it('reports every bad field at once, so a form can show them together', () => {
+    const result = validateParams({ startingCash: -1, monthlyBurn: NaN, churn: 2 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const keys = result.issues.map((i) => i.key);
+      expect(keys).toContain('startingCash');
+      expect(keys).toContain('monthlyBurn');
+      expect(keys).toContain('churn');
+      // customers, price and newPerMonth are missing entirely, so they are issues too.
+      expect(result.issues).toHaveLength(6);
+    }
+  });
+
+  it('names every key it rejects, so no field can fail silently', () => {
+    const result = validateParams({});
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.map((i) => i.key).sort()).toEqual(Object.keys(BOUNDS).sort());
+    }
   });
 });

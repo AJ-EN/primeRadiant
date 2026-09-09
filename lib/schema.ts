@@ -1,29 +1,36 @@
 import { z } from 'zod';
-import type { Params } from './engine';
+import { PARAM_KEYS, validateParams, type ParamKey } from './engine';
 
-export const PARAM_KEYS = [
-  'startingCash',
-  'monthlyBurn',
-  'customers',
-  'price',
-  'churn',
-  'newPerMonth',
-] as const;
-
-export type ParamKey = (typeof PARAM_KEYS)[number];
+// The engine owns the key list and the bounds because it has no imports and is the thing
+// those bounds are actually about. Re-exported so callers have one place to reach for.
+export { PARAM_KEYS };
+export type { ParamKey };
 
 /** Zod 4's z.number() already rejects NaN and Infinity, so min(0) is the whole guard. */
 const money = z.number().min(0);
 const rate = z.number().min(0).max(1);
 
-export const ParamsSchema = z.object({
-  startingCash: money,
-  monthlyBurn: money,
-  customers: money,
-  price: money,
-  churn: rate,
-  newPerMonth: money,
-}) satisfies z.ZodType<Params>;
+/**
+ * Shape here, bounds in the engine. `superRefine` delegates to `validateParams` rather than
+ * restating min/max, so a bound cannot drift between what the URL accepts and what the form
+ * accepts. A payload outside the bounds is rejected, never quietly repaired.
+ */
+export const ParamsSchema = z
+  .object({
+    startingCash: z.number(),
+    monthlyBurn: z.number(),
+    customers: z.number(),
+    price: z.number(),
+    churn: z.number(),
+    newPerMonth: z.number(),
+  })
+  .superRefine((value, ctx) => {
+    const result = validateParams(value);
+    if (result.ok) return;
+    for (const issue of result.issues) {
+      ctx.addIssue({ code: 'custom', path: [issue.key], message: issue.message });
+    }
+  });
 
 /**
  * What /api/parse returns.
@@ -73,6 +80,13 @@ export const ModelStateSchema = z.object({
   p: ParamsSchema,
   /** Assumption sentences, in plain English, as returned by the parser. */
   a: z.array(z.string().max(280)).max(8).default([]),
+  /**
+   * Param keys that were defaulted rather than read: either the parser filled a defensible
+   * default, or the reader told the clarifier they did not know. This is what renders the
+   * "we guessed this" badge, so it has to survive the URL or the badge is decorative.
+   * Omitted when empty to keep the payload short.
+   */
+  i: z.array(z.enum(PARAM_KEYS)).max(6).optional(),
   /**
    * Origin params, present only on a fork. Carries the parent's numbers so the fork can
    * draw the original curve as a grey dashed ghost and diff changed vs unchanged params

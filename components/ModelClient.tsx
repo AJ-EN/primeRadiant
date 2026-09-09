@@ -3,13 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import {
-  DEFAULT_MONTHS,
-  model,
-  project,
-  sanitizeParams,
-  type Params,
-} from '@/lib/engine';
+import { DEFAULT_MONTHS, model, project, type Params } from '@/lib/engine';
 import type { ModelState } from '@/lib/schema';
 import { changedParams, decodeState, fingerprint, stateToPath } from '@/lib/url';
 import { resolveSliders } from '@/lib/sliders';
@@ -73,7 +67,8 @@ function Model({ initial }: { initial: ModelState }) {
   const { points, derived } = useMemo(() => model(params, months), [params, months]);
 
   const ghost = useMemo(
-    () => (isFork ? project(sanitizeParams(originParams), months) : null),
+    // Already validated: it came out of ModelStateSchema, which refines on validateParams.
+    () => (isFork ? project(originParams, months) : null),
     [isFork, originParams, months],
   );
 
@@ -83,6 +78,9 @@ function Model({ initial }: { initial: ModelState }) {
       s: initial.s,
       p: params,
       a: initial.a,
+      // Must be re-emitted, or the debounced rewrite quietly drops it 300ms after load and
+      // every shared link loses the badge that says which numbers were guessed.
+      ...(initial.i && initial.i.length > 0 ? { i: initial.i } : {}),
       ...(isFork ? { o: originParams, f: initial.f ?? fingerprint(originParams) } : {}),
     }),
     [initial, params, isFork, originParams],
@@ -278,7 +276,13 @@ function Model({ initial }: { initial: ModelState }) {
           </div>
         </div>
 
-        <Assumptions params={params} sliders={sliders} months={months} />
+        <Assumptions
+          params={params}
+          sliders={sliders}
+          months={months}
+          // Carried through the URL so a shared model still shows which numbers were guessed.
+          inferred={initial.i ?? []}
+        />
 
         {fromLink === true && <ForkPrompt onShare={onShare} />}
       </main>

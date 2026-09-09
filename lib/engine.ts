@@ -14,7 +14,7 @@ export type Params = {
   customers: number;
   /** Revenue per customer per month. */
   price: number;
-  /** Fraction of customers lost per month, 0..0.99. */
+  /** Fraction of customers lost per month, 0..1. */
   churn: number;
   /** New customers acquired per month, absolute count (not a growth rate). */
   newPerMonth: number;
@@ -60,8 +60,17 @@ export type Derived = {
 
 export const DEFAULT_MONTHS = 24;
 
-/** Churn of exactly 1 makes the ceiling undefined; above 0.99 the model is noise anyway. */
-export const MAX_CHURN = 0.99;
+/** Canonical order. Owned here because this file has no imports; schema.ts re-exports it. */
+export const PARAM_KEYS = [
+  'startingCash',
+  'monthlyBurn',
+  'customers',
+  'price',
+  'churn',
+  'newPerMonth',
+] as const;
+
+export type ParamKey = (typeof PARAM_KEYS)[number];
 
 /**
  * How far past the horizon we are willing to look for breakeven. 50 years.
@@ -69,21 +78,69 @@ export const MAX_CHURN = 0.99;
  */
 const BREAKEVEN_SEARCH_CAP = 600;
 
-const clamp = (n: number, lo: number, hi: number) => (n < lo ? lo : n > hi ? hi : n);
+/**
+ * The single source of truth for what a valid number is. Zod refines against this rather
+ * than restating it, so there is one place a bound can be wrong.
+ *
+ * Churn runs to a full 1.0. SPEC 3.4 claimed a clamp at 0.99 was needed because "at exactly
+ * 1 the ceiling is undefined", but that is not true: the recurrence is c = c(1 - churn) + n,
+ * whose fixed point at churn = 1 is exactly n, and the closed form n / churn returns n. There
+ * is no division by zero. The clamp only ever did one thing, which was silently compute with
+ * a number the user did not type.
+ */
+export const BOUNDS: Record<ParamKey, { min: number; max: number; label: string }> = {
+  startingCash: { min: 0, max: 1e12, label: 'Starting cash' },
+  monthlyBurn: { min: 0, max: 1e12, label: 'Monthly burn' },
+  customers: { min: 0, max: 1e9, label: 'Customers today' },
+  price: { min: 0, max: 1e9, label: 'Price per customer' },
+  churn: { min: 0, max: 1, label: 'Monthly churn' },
+  newPerMonth: { min: 0, max: 1e9, label: 'New customers per month' },
+};
 
-/** URLs are user-editable and the LLM is a parser, not an oracle. Never trust raw params. */
-export function sanitizeParams(raw: Partial<Params>): Params {
-  const num = (v: unknown, fallback = 0) =>
-    typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+export type FieldIssue = { key: ParamKey; message: string };
 
-  return {
-    startingCash: Math.max(0, num(raw.startingCash)),
-    monthlyBurn: Math.max(0, num(raw.monthlyBurn)),
-    customers: Math.max(0, num(raw.customers)),
-    price: Math.max(0, num(raw.price)),
-    churn: clamp(num(raw.churn), 0, MAX_CHURN),
-    newPerMonth: Math.max(0, num(raw.newPerMonth)),
-  };
+export type ParamsResult =
+  | { ok: true; params: Params }
+  | { ok: false; issues: FieldIssue[] };
+
+const describeMax = (key: ParamKey): string =>
+  key === 'churn' ? '100%' : BOUNDS[key].max.toLocaleString('en-US');
+
+/**
+ * Reject and explain. Never repair.
+ *
+ * This replaced `sanitizeParams`, which floored negatives to 0 and clamped churn, so a
+ * founder who typed 100% churn saw 100% in the field while the chart was drawn at 99%. A
+ * tool whose entire pitch is that its assumptions are visible cannot quietly substitute its
+ * own numbers for yours. Every caller now has to decide what to show when input is wrong,
+ * which is the point.
+ */
+export function validateParams(
+  raw: Partial<Record<ParamKey, unknown>>,
+): ParamsResult {
+  const issues: FieldIssue[] = [];
+  const params = {} as Params;
+
+  for (const key of PARAM_KEYS) {
+    const value = raw[key];
+    const { min, max, label } = BOUNDS[key];
+
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      issues.push({ key, message: `${label} needs to be a number.` });
+      continue;
+    }
+    if (value < min) {
+      issues.push({ key, message: `${label} cannot be negative.` });
+      continue;
+    }
+    if (value > max) {
+      issues.push({ key, message: `${label} cannot be more than ${describeMax(key)}.` });
+      continue;
+    }
+    params[key] = value;
+  }
+
+  return issues.length > 0 ? { ok: false, issues } : { ok: true, params };
 }
 
 /**
@@ -186,9 +243,12 @@ export function derive(p: Params, points: Point[]): Derived {
   };
 }
 
-/** What the UI calls. One pass, sanitized, on every slider frame. */
-export function model(raw: Partial<Params>, months = DEFAULT_MONTHS) {
-  const params = sanitizeParams(raw);
+/**
+ * What the UI calls, once per slider frame. Takes params that already passed
+ * `validateParams` at their entry boundary; it does not repair, because repairing here is
+ * exactly how a number the user never typed ends up on the chart.
+ */
+export function model(params: Params, months = DEFAULT_MONTHS) {
   const points = project(params, months);
   return { params, points, derived: derive(params, points) };
 }

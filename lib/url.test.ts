@@ -52,6 +52,31 @@ describe('encode / decode', () => {
     expect(decodeState(encodeState(s))?.s).toBe(s.s);
   });
 
+  it('carries the inferred list, or the badge it drives is decorative', () => {
+    const guessed: ModelState = { ...STATE, i: ['churn', 'customers'] };
+    expect(decodeState(encodeState(guessed))?.i).toEqual(['churn', 'customers']);
+  });
+
+  it('omits the inferred list when nothing was guessed, to keep the payload short', () => {
+    expect(encodeState(STATE)).not.toContain('aSI');
+    expect(decodeState(encodeState(STATE))?.i).toBeUndefined();
+  });
+
+  it('accepts churn of exactly 1 rather than silently drawing 0.99', () => {
+    const total: ModelState = { ...STATE, p: { ...PARAMS, churn: 1 } };
+    expect(decodeState(encodeState(total))?.p.churn).toBe(1);
+  });
+
+  it('rejects out-of-bounds params instead of repairing them', () => {
+    for (const bad of [
+      { ...PARAMS, churn: 1.5 },
+      { ...PARAMS, startingCash: -1 },
+      { ...PARAMS, price: 1e13 },
+    ]) {
+      expect(decodeState(encodeState({ ...STATE, p: bad }))).toBeNull();
+    }
+  });
+
   it('returns null instead of throwing on garbage', () => {
     for (const bad of ['', null, undefined, 'not-base64!!', 'YWJj', '%%%%']) {
       expect(decodeState(bad)).toBeNull();

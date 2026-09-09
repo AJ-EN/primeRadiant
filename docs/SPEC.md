@@ -95,7 +95,13 @@ const runoutMonth      = points.find(pt => pt.cash < 0)?.month ?? null;
 Row 2 is the reason to build this. Lead with it whenever it fires.
 
 ### 3.4 Numerical guards
-- `churn` clamped to `[0, 0.99]`. At exactly 1 the ceiling is undefined.
+- `churn` accepted across `[0, 1]`. **Corrected 2026-09-10:** this originally said clamp to
+  `[0, 0.99]` "because at exactly 1 the ceiling is undefined". That is wrong. The recurrence
+  is `c = c(1 - churn) + n`, whose fixed point at `churn = 1` is exactly `n`, and the closed
+  form `n / churn` returns `n`. There is no division by zero. The clamp's only real effect
+  was to draw a curve using a number the user did not type, which contradicts the rule below.
+- **Out-of-bounds input is rejected and explained, never repaired.** `validateParams` returns
+  a per-field issue list; the URL decoder refuses the payload and the forms show the message.
 - `churn = 0` gives infinite ceiling. Handle explicitly, do not divide by zero.
 - Cash is allowed to go negative and stay plotted. Going negative is the whole point.
 - All money rounded for display only, never in the loop.
