@@ -37,7 +37,7 @@ export default function Assumptions({ params, sliders, inferred = [], months }: 
   const columns = [lines.slice(0, half), lines.slice(half)];
 
   return (
-    <section className="rounded-[12px] border border-line bg-sunk px-6 pt-5 pb-[22px]">
+    <section className="rounded-[12px] border border-line bg-sunk px-4 pt-4 pb-5 sm:px-6 sm:pt-5 sm:pb-[22px]">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-[15px] font-semibold text-ink">What the model assumed</h2>
         <p className="text-[13px] text-ink-3">

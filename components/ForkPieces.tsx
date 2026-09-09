@@ -52,7 +52,7 @@ export function DiffPanel({
   const unchanged = ALL_KEYS.filter((k) => !changed.includes(k));
 
   return (
-    <div className="flex flex-col gap-[18px] rounded-[12px] border border-line bg-surface p-5">
+    <div className="flex flex-col gap-[18px] rounded-[12px] border border-line bg-surface p-4 sm:p-5">
       <p className="text-[11px] font-semibold tracking-[0.88px] text-ink-3">WHAT YOU CHANGED</p>
 
       {changed.map((k) => (
@@ -104,7 +104,7 @@ export function DiffPanel({
 
 export function ForkPrompt({ onShare }: { onShare: () => void }) {
   return (
-    <div className="flex w-full flex-wrap items-center justify-between gap-4 rounded-[12px] border border-line bg-sunk px-6 py-[18px]">
+    <div className="flex w-full flex-wrap items-center justify-between gap-4 rounded-[12px] border border-line bg-sunk px-4 py-4 sm:px-6 sm:py-[18px]">
       <p className="text-[14px] font-medium text-ink">
         Think an assumption is wrong? Change it and post your version. That is the whole point.
       </p>

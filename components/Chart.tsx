@@ -7,20 +7,56 @@
  * Pure function of props. No state, no effects, no memo — it must be cheap enough to
  * re-render synchronously on every `input` event while a finger is down.
  *
- * Geometry matches the Figma plot: 700 x 284, five gridlines, curve teal above zero and
- * orange below, no y-axis labels except $0 on the zero line.
+ * Two coordinate spaces, not one. Text inside an SVG scales with the viewBox, so the 700-wide
+ * desktop plot squeezed into a 311px phone rendered its labels at about 5px. The compact
+ * space is sized so it renders near 1:1 on a phone, which keeps every annotation legible.
+ * Which one is used is a CSS decision in ModelClient, so there is no hook, no hydration
+ * mismatch and no flash of the wrong size.
  */
 import type { Point } from '@/lib/engine';
 import { money } from '@/lib/format';
 
-const W = 700;
-const H = 284;
-/** The curve lives between these, matching the first and last gridline in the design. */
-const TOP = 10;
-const BOTTOM = 270;
+type Geometry = {
+  W: number;
+  H: number;
+  /** The curve lives between these, matching the first and last gridline in the design. */
+  top: number;
+  bottom: number;
+  /** Horizontal reach, in viewBox units, over which a label is considered to be colliding. */
+  reach: number;
+  labelSize: number;
+  zeroSize: number;
+  curveWidth: number;
+  ghostWidth: number;
+  markerRadius: number;
+};
 
-/** Horizontal reach, in px, over which a label is considered to be colliding. */
-const COLLISION_REACH = 100;
+const FULL: Geometry = {
+  W: 700,
+  H: 284,
+  top: 10,
+  bottom: 270,
+  reach: 100,
+  labelSize: 12,
+  zeroSize: 11,
+  curveWidth: 2.5,
+  ghostWidth: 2,
+  markerRadius: 5.5,
+};
+
+/** Sized so a 375px phone renders this at roughly 1:1, give or take 15%. */
+const COMPACT: Geometry = {
+  W: 300,
+  H: 210,
+  top: 8,
+  bottom: 196,
+  reach: 45,
+  labelSize: 11,
+  zeroSize: 10,
+  curveWidth: 2,
+  ghostWidth: 1.5,
+  markerRadius: 4.5,
+};
 
 type Rect = { x: number; y: number; w: number; h: number };
 
@@ -68,10 +104,11 @@ function boxesOverlap(a: Rect, b: Rect): boolean {
  * fixed coordinates, because the curve moves under it on every slider frame.
  *
  * Four candidate corners around the anchor. Score each by clearance to the nearest curve
- * point within COLLISION_REACH horizontally, disqualify any that overlaps a label already
- * placed, and take the roomiest. Ties break toward above-right, where a reader looks first.
+ * point within `reach` horizontally, disqualify any that overlaps a label already placed,
+ * and take the roomiest. Ties break toward above-right, where a reader looks first.
  */
 function placeLabel(
+  geo: Geometry,
   curves: { x: number; y: number }[][],
   cx: number,
   cy: number,
@@ -79,20 +116,26 @@ function placeLabel(
   bh: number,
   taken: Rect[],
 ): Rect {
+  const pad = geo === COMPACT ? 8 : 14;
   const candidates = [
-    { x: cx + 12, y: cy - 12 - bh },
-    { x: cx + 12, y: cy + 12 },
-    { x: cx - 12 - bw, y: cy - 12 - bh },
-    { x: cx - 12 - bw, y: cy + 12 },
+    { x: cx + pad, y: cy - pad - bh },
+    { x: cx + pad, y: cy + pad },
+    { x: cx - pad - bw, y: cy - pad - bh },
+    { x: cx - pad - bw, y: cy + pad },
   ];
 
-  let best: Rect = { x: clamp(cx + 12, 0, W - bw), y: clamp(cy - 12 - bh, 0, H - bh), w: bw, h: bh };
+  let best: Rect = {
+    x: clamp(cx + pad, 0, geo.W - bw),
+    y: clamp(cy - pad - bh, 0, geo.H - bh),
+    w: bw,
+    h: bh,
+  };
   let bestClearance = -Infinity;
 
   for (const c of candidates) {
     const box: Rect = {
-      x: clamp(c.x, 2, W - bw - 2),
-      y: clamp(c.y, 2, H - bh - 2),
+      x: clamp(c.x, 2, geo.W - bw - 2),
+      y: clamp(c.y, 2, geo.H - bh - 2),
       w: bw,
       h: bh,
     };
@@ -101,7 +144,7 @@ function placeLabel(
     let clearance = Infinity;
     for (const curve of curves)
       for (const p of curve) {
-        if (Math.abs(p.x - cx) > COLLISION_REACH) continue;
+        if (Math.abs(p.x - cx) > geo.reach) continue;
         clearance = Math.min(clearance, boxDistance(box, p.x, p.y));
       }
     if (clearance > bestClearance) {
@@ -121,13 +164,17 @@ export type ChartProps = {
   ghost?: Point[] | null;
   runoutMonth: number | null;
   months: number;
+  /** Phone-sized coordinate space. Chosen by CSS in ModelClient, never by a media hook. */
+  compact?: boolean;
 };
 
-export default function Chart({ points, ghost, runoutMonth, months }: ChartProps) {
+export default function Chart({ points, ghost, runoutMonth, months, compact }: ChartProps) {
+  const geo = compact ? COMPACT : FULL;
   const { lo, hi } = yDomain(ghost ? [points, ghost] : [points]);
 
-  const x = (m: number) => (m / months) * W;
-  const y = (cash: number) => TOP + (1 - (cash - lo) / (hi - lo)) * (BOTTOM - TOP);
+  const x = (m: number) => (m / months) * geo.W;
+  const y = (cash: number) =>
+    geo.top + (1 - (cash - lo) / (hi - lo)) * (geo.bottom - geo.top);
 
   const yZero = y(0);
   const toXY = (p: Point) => ({ x: x(p.month), y: y(p.cash) });
@@ -137,7 +184,7 @@ export default function Chart({ points, ghost, runoutMonth, months }: ChartProps
   const line = (pts: { x: number; y: number }[]) =>
     pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
 
-  const area = `${line(curve)} L${W},${yZero.toFixed(2)} L0,${yZero.toFixed(2)} Z`;
+  const area = `${line(curve)} L${geo.W},${yZero.toFixed(2)} L0,${yZero.toFixed(2)} Z`;
 
   /** Exact zero crossing, interpolated between the last solvent month and the first that isn't. */
   const crossingX = (series: Point[], month: number | null): number | null => {
@@ -159,24 +206,47 @@ export default function Chart({ points, ghost, runoutMonth, months }: ChartProps
 
   const taken: Rect[] = [];
   const allCurves = ghostCurve ? [curve, ghostCurve] : [curve];
+  const labelH = geo.labelSize + 4;
 
-  const runoutText = runoutMonth !== null ? `month ${runoutMonth} · out of cash` : '';
+  // Phone-width labels are shorter: the full phrase would span half the plot.
+  const runoutText =
+    runoutMonth === null ? '' : compact ? `month ${runoutMonth}` : `month ${runoutMonth} · out of cash`;
   const runoutBox =
     crossX !== null
-      ? placeLabel(allCurves, crossX, yZero, textWidth(runoutText, 12), 16, taken)
+      ? placeLabel(geo, allCurves, crossX, yZero, textWidth(runoutText, geo.labelSize), labelH, taken)
       : null;
   if (runoutBox) taken.push(runoutBox);
 
-  const troughText = showTrough ? `lowest point · ${money(trough.cash)}` : '';
+  const troughText = showTrough
+    ? compact
+      ? money(trough.cash)
+      : `lowest point · ${money(trough.cash)}`
+    : '';
   const troughBox = showTrough
-    ? placeLabel(allCurves, x(trough.month), y(trough.cash), textWidth(troughText, 12), 16, taken)
+    ? placeLabel(
+        geo,
+        allCurves,
+        x(trough.month),
+        y(trough.cash),
+        textWidth(troughText, geo.labelSize),
+        labelH,
+        taken,
+      )
     : null;
   if (troughBox) taken.push(troughBox);
 
-  const ghostText = 'original ran out here';
+  const ghostText = compact ? 'original' : 'original ran out here';
   const ghostBox =
     ghostCrossX !== null && ghost
-      ? placeLabel(allCurves, ghostCrossX, yZero, textWidth(ghostText, 12), 16, taken)
+      ? placeLabel(
+          geo,
+          allCurves,
+          ghostCrossX,
+          yZero,
+          textWidth(ghostText, geo.labelSize),
+          labelH,
+          taken,
+        )
       : null;
 
   const summary =
@@ -185,46 +255,40 @@ export default function Chart({ points, ghost, runoutMonth, months }: ChartProps
       : `Cash projection over ${months} months. Cash stays above zero throughout.`;
 
   const axisTicks = [0, months / 4, months / 2, (months * 3) / 4, months].map(Math.round);
+  const clipAbove = compact ? 'pr-above-c' : 'pr-above';
+  const clipBelow = compact ? 'pr-below-c' : 'pr-below';
 
   return (
     <div className="w-full">
       <svg
-        viewBox={`0 0 ${W} ${H}`}
+        viewBox={`0 0 ${geo.W} ${geo.H}`}
         className="block h-auto w-full select-none"
         role="img"
         aria-label={summary}
       >
         <defs>
-          <clipPath id="pr-above">
-            <rect x={0} y={0} width={W} height={Math.max(0, yZero)} />
+          <clipPath id={clipAbove}>
+            <rect x={0} y={0} width={geo.W} height={Math.max(0, yZero)} />
           </clipPath>
-          <clipPath id="pr-below">
-            <rect x={0} y={yZero} width={W} height={Math.max(0, H - yZero)} />
+          <clipPath id={clipBelow}>
+            <rect x={0} y={yZero} width={geo.W} height={Math.max(0, geo.H - yZero)} />
           </clipPath>
         </defs>
 
         {[0, 1, 2, 3, 4].map((i) => {
-          const gy = TOP + (i * (BOTTOM - TOP)) / 4;
+          const gy = geo.top + (i * (geo.bottom - geo.top)) / 4;
           return (
-            <line
-              key={i}
-              x1={0}
-              x2={W}
-              y1={gy}
-              y2={gy}
-              stroke="var(--line)"
-              strokeWidth={1}
-            />
+            <line key={i} x1={0} x2={geo.W} y1={gy} y2={gy} stroke="var(--line)" strokeWidth={1} />
           );
         })}
 
-        <path d={area} fill="var(--accent-soft)" clipPath="url(#pr-above)" />
-        <path d={area} fill="var(--danger-soft)" clipPath="url(#pr-below)" />
+        <path d={area} fill="var(--accent-soft)" clipPath={`url(#${clipAbove})`} />
+        <path d={area} fill="var(--danger-soft)" clipPath={`url(#${clipBelow})`} />
 
         {/* Zero line, dashed, in the same orange as everything that means "you are dead". */}
         <line
           x1={0}
-          x2={W}
+          x2={geo.W}
           y1={yZero}
           y2={yZero}
           stroke="var(--danger)"
@@ -238,7 +302,7 @@ export default function Chart({ points, ghost, runoutMonth, months }: ChartProps
             d={line(ghostCurve)}
             fill="none"
             stroke="var(--ghost)"
-            strokeWidth={2}
+            strokeWidth={geo.ghostWidth}
             strokeDasharray="5 4"
             strokeLinecap="round"
           />
@@ -249,36 +313,57 @@ export default function Chart({ points, ghost, runoutMonth, months }: ChartProps
           d={line(curve)}
           fill="none"
           stroke="var(--accent)"
-          strokeWidth={2.5}
+          strokeWidth={geo.curveWidth}
           strokeLinecap="round"
           strokeLinejoin="round"
-          clipPath="url(#pr-above)"
+          clipPath={`url(#${clipAbove})`}
         />
         <path
           d={line(curve)}
           fill="none"
           stroke="var(--danger)"
-          strokeWidth={2.5}
+          strokeWidth={geo.curveWidth}
           strokeLinecap="round"
           strokeLinejoin="round"
-          clipPath="url(#pr-below)"
+          clipPath={`url(#${clipBelow})`}
         />
 
         {ghostCrossX !== null && (
-          <circle cx={ghostCrossX} cy={yZero} r={4} fill="var(--surface)" stroke="var(--ghost)" strokeWidth={2} />
+          <circle
+            cx={ghostCrossX}
+            cy={yZero}
+            r={geo.markerRadius * 0.75}
+            fill="var(--surface)"
+            stroke="var(--ghost)"
+            strokeWidth={2}
+          />
         )}
         {crossX !== null && (
-          <circle cx={crossX} cy={yZero} r={5.5} fill="var(--surface)" stroke="var(--danger)" strokeWidth={2.5} />
+          <circle
+            cx={crossX}
+            cy={yZero}
+            r={geo.markerRadius}
+            fill="var(--surface)"
+            stroke="var(--danger)"
+            strokeWidth={2.5}
+          />
         )}
         {showTrough && (
-          <circle cx={x(trough.month)} cy={y(trough.cash)} r={5} fill="var(--surface)" stroke="var(--accent)" strokeWidth={2.5} />
+          <circle
+            cx={x(trough.month)}
+            cy={y(trough.cash)}
+            r={geo.markerRadius * 0.9}
+            fill="var(--surface)"
+            stroke="var(--accent)"
+            strokeWidth={2.5}
+          />
         )}
 
         <text
-          x={W - 2}
+          x={geo.W - 2}
           y={yZero - 7}
           textAnchor="end"
-          fontSize={11}
+          fontSize={geo.zeroSize}
           fontWeight={600}
           fill="var(--danger)"
         >
@@ -286,26 +371,46 @@ export default function Chart({ points, ghost, runoutMonth, months }: ChartProps
         </text>
 
         {runoutBox && (
-          <text x={runoutBox.x} y={runoutBox.y + 12} fontSize={12} fontWeight={600} fill="var(--danger)">
+          <text
+            x={runoutBox.x}
+            y={runoutBox.y + geo.labelSize}
+            fontSize={geo.labelSize}
+            fontWeight={600}
+            fill="var(--danger)"
+          >
             {runoutText}
           </text>
         )}
         {troughBox && (
-          <text x={troughBox.x} y={troughBox.y + 12} fontSize={12} fontWeight={600} fill="var(--accent)">
+          <text
+            x={troughBox.x}
+            y={troughBox.y + geo.labelSize}
+            fontSize={geo.labelSize}
+            fontWeight={600}
+            fill="var(--accent)"
+          >
             {troughText}
           </text>
         )}
         {ghostBox && (
-          <text x={ghostBox.x} y={ghostBox.y + 12} fontSize={12} fontWeight={500} fill="var(--ink-3)">
+          <text
+            x={ghostBox.x}
+            y={ghostBox.y + geo.labelSize}
+            fontSize={geo.labelSize}
+            fontWeight={500}
+            fill="var(--ink-3)"
+          >
             {ghostText}
           </text>
         )}
       </svg>
 
-      <div className="mt-3.5 flex justify-between text-[12px] text-ink-3">
+      <div
+        className={`mt-3 flex justify-between text-ink-3 ${compact ? 'text-[11px]' : 'text-[12px]'}`}
+      >
         {axisTicks.map((m, i) => (
           <span key={i} style={{ fontVariantNumeric: 'tabular-nums' }}>
-            {m === 0 ? 'now' : `month ${m}`}
+            {m === 0 ? 'now' : compact ? `m${m}` : `month ${m}`}
           </span>
         ))}
       </div>

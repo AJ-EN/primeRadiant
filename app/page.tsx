@@ -10,7 +10,7 @@ export default function Home() {
       </TopBar>
 
       <main className="flex w-full flex-1 flex-col">
-        <div className="flex min-h-[calc(100vh-57px)] w-full items-center justify-center px-10 py-8">
+        <div className="flex min-h-[calc(100vh-57px)] w-full items-center justify-center px-4 py-8 sm:px-6 lg:px-10">
           <div className="w-full max-w-[760px]">
             <Suspense>
               <Composer />
@@ -24,7 +24,7 @@ export default function Home() {
           another AI wrapper" objection by showing the arithmetic rather than claiming
           anything about it (SPEC 11).
         */}
-        <section className="mx-auto w-full max-w-[760px] px-10 pb-20">
+        <section className="mx-auto w-full max-w-[760px] px-4 pb-16 sm:px-6 sm:pb-20 lg:px-10">
           <div className="border-t border-line pt-8">
             <h2 className="text-[11px] font-semibold tracking-[1.1px] text-ink-3">
               WHERE THE NUMBERS COME FROM

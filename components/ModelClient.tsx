@@ -191,14 +191,14 @@ function Model({ initial }: { initial: ModelState }) {
             <button
               type="button"
               onClick={onCopy}
-              className="cursor-pointer rounded-[8px] border border-line bg-surface px-3.5 py-2 text-[13px] leading-4 font-medium text-ink-2 hover:border-ink-3"
+              className="cursor-pointer rounded-[8px] border border-line bg-surface px-3 py-2 text-[13px] leading-4 font-medium text-ink-2 hover:border-ink-3 sm:px-3.5"
             >
               Copy link
             </button>
             <button
               type="button"
               onClick={onShare}
-              className="cursor-pointer rounded-[8px] bg-ink px-3.5 py-2 text-[13px] leading-4 font-semibold text-white"
+              className="cursor-pointer rounded-[8px] bg-ink px-3 py-2 text-[13px] leading-4 font-semibold text-white sm:px-3.5"
             >
               Share model
             </button>
@@ -206,7 +206,7 @@ function Model({ initial }: { initial: ModelState }) {
         )}
       </TopBar>
 
-      <main className="mx-auto flex w-full max-w-[1280px] flex-col gap-5 px-10 py-8">
+      <main className="mx-auto flex w-full max-w-[1280px] flex-col gap-5 px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
         {fromLink === true && <AttributionStrip />}
 
         {initial.s && (
@@ -235,8 +235,9 @@ function Model({ initial }: { initial: ModelState }) {
         <Verdict derived={derived} params={params} months={months} isFork={isFork} />
 
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-          <div className="flex flex-col gap-4 rounded-[12px] border border-line bg-surface px-6 py-5 lg:w-[776px] lg:shrink-0">
-            <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 rounded-[12px] border border-line bg-surface px-4 py-4 sm:px-6 sm:py-5 lg:w-[776px] lg:shrink-0">
+            {/* Stacks on a phone: side by side, both halves wrapped to two lines each. */}
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-[15px] font-semibold text-ink">Cash balance</h2>
               {ghost ? (
                 <div className="flex items-center gap-4">
@@ -244,17 +245,34 @@ function Model({ initial }: { initial: ModelState }) {
                   <Legend color="var(--accent)" label="This fork" />
                 </div>
               ) : (
-                <p className="text-[13px] text-ink-3">
+                <p className="text-[12px] text-ink-3 sm:text-[13px]">
                   {money(params.startingCash)} today &nbsp;·&nbsp; {months} months projected
                 </p>
               )}
             </div>
-            <Chart
-              points={points}
-              ghost={ghost}
-              runoutMonth={derived.runoutMonth}
-              months={months}
-            />
+            {/*
+              Both coordinate spaces are rendered and CSS picks one. A media hook would mean
+              an SSR mismatch and a flash of the wrong geometry; display:none also removes the
+              hidden one from the accessibility tree. Building both paths costs well under a
+              millisecond, which the drag budget can afford.
+            */}
+            <div className="sm:hidden">
+              <Chart
+                points={points}
+                ghost={ghost}
+                runoutMonth={derived.runoutMonth}
+                months={months}
+                compact
+              />
+            </div>
+            <div className="hidden sm:block">
+              <Chart
+                points={points}
+                ghost={ghost}
+                runoutMonth={derived.runoutMonth}
+                months={months}
+              />
+            </div>
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col gap-6">
@@ -312,8 +330,8 @@ function BrokenLink() {
   return (
     <>
       <TopBar />
-      <main className="mx-auto flex w-full max-w-[560px] flex-1 flex-col justify-center px-10 py-24">
-        <h1 className="text-[34px] leading-[42px] font-semibold tracking-[-0.68px] text-ink">
+      <main className="mx-auto flex w-full max-w-[560px] flex-1 flex-col justify-center px-4 py-20 sm:px-10 sm:py-24">
+        <h1 className="text-[27px] leading-[33px] font-semibold tracking-[-0.5px] text-ink sm:text-[34px] sm:leading-[42px] sm:tracking-[-0.68px]">
           That link did not decode.
         </h1>
         <p className="mt-3 text-[15px] leading-[24px] text-ink-2">

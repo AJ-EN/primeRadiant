@@ -92,7 +92,7 @@ export default function Verdict({ derived, params, months, isFork }: Props) {
 
   return (
     <section className="flex w-full flex-col gap-1.5">
-      <h1 className="text-[34px] leading-[42px] font-semibold tracking-[-0.68px] text-balance text-ink">
+      <h1 className="text-[27px] leading-[33px] font-semibold tracking-[-0.5px] text-balance text-ink sm:text-[34px] sm:leading-[42px] sm:tracking-[-0.68px]">
         {isFork ? `In this fork, ${text.charAt(0).toLowerCase()}${text.slice(1)}` : text}
       </h1>
       <p className="max-w-[760px] text-[15px] leading-[24px] text-ink-2">

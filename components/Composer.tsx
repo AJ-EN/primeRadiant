@@ -205,7 +205,7 @@ export default function Composer() {
     return (
       <form onSubmit={onFieldsSubmit} className="flex w-full flex-col gap-5" noValidate>
         <p className="text-[11px] font-semibold tracking-[1.1px] text-ink-3">STEP 2</p>
-        <h1 className="text-[38px] leading-[46px] font-semibold tracking-[-0.76px] text-ink">
+        <h1 className="text-[28px] leading-[34px] font-semibold tracking-[-0.5px] text-ink sm:text-[38px] sm:leading-[46px] sm:tracking-[-0.76px]">
           {stage.kind === 'clarify'
             ? keys.length === 1
               ? 'One thing your sentence did not say.'
@@ -316,7 +316,7 @@ export default function Composer() {
   return (
     <form onSubmit={onSubmit} className="flex w-full flex-col gap-5">
       <p className="text-[11px] font-semibold tracking-[1.1px] text-ink-3">STEP 1</p>
-      <h1 className="text-[38px] leading-[46px] font-semibold tracking-[-0.76px] text-balance text-ink">
+      <h1 className="text-[28px] leading-[34px] font-semibold tracking-[-0.5px] text-balance text-ink sm:text-[38px] sm:leading-[46px] sm:tracking-[-0.76px]">
         Describe your business in one sentence.
       </h1>
       <p className="max-w-[640px] text-[16px] leading-[26px] text-ink-2">

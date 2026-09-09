@@ -31,7 +31,7 @@ export default function SliderPanel({ params, sliders, onChange, changed, onRese
   const changedCount = sliders.filter((s) => changed?.has(s.key)).length;
 
   return (
-    <div className="rounded-[12px] border border-line bg-surface p-5">
+    <div className="rounded-[12px] border border-line bg-surface p-4 sm:p-5">
       <div className="flex flex-col gap-1">
         <h2 className="text-[11px] font-semibold tracking-[0.88px] text-ink-3">
           PULL AN ASSUMPTION

@@ -122,6 +122,49 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
   outline-offset: 2px;
 }
 
+/* ---------------------------------------------------------------------------
+   Touch. Keyed on the pointer, not the viewport: a small window on a laptop
+   still has a mouse, and a large tablet still has fingers.
+
+   The whole product is measured on whether a stranger moves a slider, and most
+   of those strangers arrive from a phone. An 18px-tall control is not draggable
+   with a thumb, so the interaction the metric counts was effectively unavailable
+   on the majority device.
+   --------------------------------------------------------------------------- */
+@media (pointer: coarse) {
+  input[type="range"] {
+    /* The rail stays 4px; this is hit area, well past the 44px guidance. */
+    height: 46px;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    width: 26px;
+    height: 26px;
+    margin-top: -11px;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 26px;
+    height: 26px;
+  }
+  input[type="range"]:active::-webkit-slider-thumb {
+    transform: scale(1.06);
+  }
+
+  /* Number fields and actions need a thumb-sized target too. */
+  input[type="number"],
+  button {
+    min-height: 44px;
+  }
+}
+
+/*
+ * Claim horizontal gestures for the slider and leave vertical ones to the page.
+ * Without this a slightly diagonal drag scrolls the article instead of moving the
+ * value, which reads as the control being broken.
+ */
+input[type="range"] {
+  touch-action: pan-y;
+}
+
 ::selection {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }

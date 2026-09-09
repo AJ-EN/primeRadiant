@@ -24,8 +24,12 @@ pnpm lint
 **If a feature does not increase the chance that a link-opener forks, it does not go in v0.**
 
 Out of scope, deliberately: accounts, auth, any database, predictions/resolution/calibration,
-Monte Carlo or uncertainty bands, verticals beyond SaaS runway, mobile drag, saved model
-libraries. All of these are documented in the spec as deferred. Do not "just add" them.
+Monte Carlo or uncertainty bands, verticals beyond SaaS runway, saved model libraries.
+
+Mobile is **no longer** deferred. SPEC 2 put it off on the reasoning that desktop comes
+first, but the kill metric counts strangers arriving from X, and most of them are on a
+phone. Deferring the drag meant the action being measured was unavailable on the majority
+device, so a low fork rate would have been a verdict on ergonomics rather than on the idea. All of these are documented in the spec as deferred. Do not "just add" them.
 
 ## Architecture
 
@@ -143,6 +147,12 @@ in `lib/engine.ts`.
   the session rather than clamping the input.
 - Chart is hand-rolled SVG. Do not add Recharts or any chart library. Annotation positions
   are computed from curve geometry, never from fixed coordinates.
+- The chart has two coordinate spaces, `FULL` and `COMPACT`, because SVG text scales with
+  the viewBox: the 700-wide plot squeezed onto a phone rendered its labels at about 5px.
+  Both are rendered and CSS picks one, so there is no media hook, no SSR mismatch and no
+  flash. Building both costs well under a millisecond of the drag budget.
+- Touch sizing keys on `(pointer: coarse)`, not a viewport width. A narrow laptop window
+  still has a mouse; a large tablet still has fingers.
 - Verdict headline is the largest element on the page. Not the chart.
 - Assumptions are always visible next to the chart. Never collapsed behind a disclosure.
 
