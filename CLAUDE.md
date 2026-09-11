@@ -131,10 +131,10 @@ Deliberate deviations from the file, each with a reason:
 | No stat strip for ceiling/breakeven | The file has none, and the verdict body already states every closed-form fact in prose. |
 | Empty state has a "where the numbers come from" section below the fold | Answers the "just another AI wrapper" risk. The first screen still matches the file exactly. |
 
-**Open discrepancy:** the file's chart axis is **12 months** ("12 months projected", ticks at
-month 3/6/9/12) but SPEC 2 and the `plateau_below_burn` outcome say **24**. The code follows
-the spec. Axis ticks derive from the horizon, so switching is one constant: `DEFAULT_MONTHS`
-in `lib/engine.ts`.
+**Resolved 2026-09-11:** the Figma file's axis reads 12 months, SPEC 2 and the
+`plateau_below_burn` outcome say 24. **24 wins** — the spec is the source of truth, and the
+verdict copy depends on it. The file is the one that is out of date. Axis ticks derive from
+the horizon, so the whole horizon is one constant: `DEFAULT_MONTHS` in `lib/engine.ts`.
 
 ## Conventions
 

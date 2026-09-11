@@ -9,6 +9,9 @@ import { z } from 'zod';
 import { PARAM_KEYS } from './engine';
 import { ParseResultSchema, normalizeParseResult, type ParseResult } from './schema';
 
+// Re-exported so lib/extract.ts depends on the parse contract rather than reaching past it.
+export type { ParseResult };
+
 export const MODEL = 'claude-haiku-4-5';
 
 /**
@@ -62,11 +65,32 @@ export function salvageJson(text: string): unknown {
   }
 }
 
+/**
+ * Every way a parse can fail, named.
+ *
+ * The user's next action is the same for all of them — the six fields, empty — but the
+ * operator's is not, and neither is the analytics story. Collapsing a timeout, a 500, a
+ * truncated reply and a schema mismatch into one `parse_failed` meant the logs could not
+ * tell you which was happening, so nobody could fix the one that was.
+ */
 export type ParseFailure =
-  | 'parse_failed'
+  /** Never left the browser in usable shape. */
   | 'bad_input'
-  | 'rate_limited'
+  /** This build has no key configured at all. */
   | 'no_key'
+  /** A key is configured and the API refused it. An operator problem, not a user one. */
+  | 'key_rejected'
+  /** Our bucket, or theirs. */
+  | 'rate_limited'
+  /** Took longer than we are willing to make somebody wait. */
+  | 'timeout'
+  /** Upstream is unreachable or returned a 5xx. */
+  | 'unavailable'
+  /** The reply hit max_tokens, so the JSON is cut in half. Raise the cap, not the prompt. */
+  | 'truncated'
+  /** It came back, and it could not be trusted. */
+  | 'parse_failed'
+  /** It came back with a number outside the engine's bounds. */
   | 'out_of_bounds';
 
 export type Interpretation =

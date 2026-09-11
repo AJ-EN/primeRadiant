@@ -79,11 +79,24 @@ const UNKNOWN_DEFAULTS: Partial<Record<ParamKey, { value: number; because: strin
 const NOTES: Record<string, string> = {
   no_key:
     'Reading sentences is switched off on this build. The model itself works exactly the same — it just needs the six numbers from you.',
+  key_rejected:
+    'Sentence reading is not working right now, and that is on us rather than on your sentence. Six numbers and you are through.',
   rate_limited: 'That is a lot of models in one hour. Fill the six numbers in yourself and carry on.',
+  timeout: 'That took too long to come back. Six numbers and you are through.',
+  unavailable: 'The reader is unreachable at the moment. Six numbers and you are through.',
+  truncated: 'The reader ran out of room part way through. Six numbers and you are through.',
   parse_failed: 'That sentence did not read cleanly. Six numbers and you are through.',
   bad_input: 'That sentence was too short to read. Six numbers and you are through.',
+  out_of_bounds: 'One of those numbers was outside what the model can take. Six numbers and you are through.',
   network: 'That request did not make it out of the browser. Six numbers and you are through.',
 };
+
+/**
+ * Longer than the server's own ceiling (10s per attempt, one retry, so about 21s worst case)
+ * so the server nearly always wins the race and can name the failure. This is the backstop
+ * for the case where the response never arrives at all.
+ */
+const FETCH_TIMEOUT_MS = 30_000;
 
 type Stage =
   | { kind: 'idle' }
@@ -130,6 +143,7 @@ export default function Composer() {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ sentence: s }),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
       const data = await res.json();
 
@@ -155,9 +169,13 @@ export default function Composer() {
         return;
       }
       go(validated.params, result.assumptions, result.inferred);
-    } catch {
-      track('parse_failed', { reason: 'network' });
-      setStage({ kind: 'manual', note: NOTES.network });
+    } catch (err) {
+      // An abort is a timeout, not a network failure, and saying so is the difference
+      // between "your connection dropped" and "we kept you waiting".
+      const timedOut = err instanceof DOMException && err.name === 'TimeoutError';
+      const reason = timedOut ? 'timeout' : 'network';
+      track('parse_failed', { reason });
+      setStage({ kind: 'manual', note: NOTES[reason] });
     }
   }
 
