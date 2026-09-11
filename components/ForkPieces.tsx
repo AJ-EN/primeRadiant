@@ -1,24 +1,9 @@
 'use client';
 
 import type { Params } from '@/lib/engine';
-import { count } from '@/lib/format';
-import { SLIDERS } from '@/lib/sliders';
+import { ALL_PARAM_KEYS, paramDisplay } from '@/lib/sliders';
 
-const LABELS: Record<keyof Params, string> = {
-  customers: 'Customers today',
-  ...(Object.fromEntries(SLIDERS.map((s) => [s.key, s.label])) as Record<
-    Exclude<keyof Params, 'customers'>,
-    string
-  >),
-};
-
-const FORMATTERS = Object.fromEntries(SLIDERS.map((s) => [s.key, s.format])) as Partial<
-  Record<keyof Params, (v: number) => string>
->;
-
-const show = (k: keyof Params, v: number) => (FORMATTERS[k] ?? count)(v);
-
-const ALL_KEYS = Object.keys(LABELS) as (keyof Params)[];
+const show = (k: keyof Params, v: number) => paramDisplay(k).format(v);
 
 /**
  * No opens or forks count: those need a database, and v0 has none (SPEC 2). The one line
@@ -49,7 +34,7 @@ export function DiffPanel({
   onSave: () => void;
   saveLabel: string;
 }) {
-  const unchanged = ALL_KEYS.filter((k) => !changed.includes(k));
+  const unchanged = ALL_PARAM_KEYS.filter((k) => !changed.includes(k));
 
   return (
     <div className="flex flex-col gap-[18px] rounded-[12px] border border-line bg-surface p-4 sm:p-5">
@@ -57,7 +42,7 @@ export function DiffPanel({
 
       {changed.map((k) => (
         <div key={k} className="flex flex-col gap-1.5">
-          <p className="text-[13px] font-medium text-ink-2">{LABELS[k]}</p>
+          <p className="text-[13px] font-medium text-ink-2">{paramDisplay(k).label}</p>
           <div
             className="flex items-center gap-2"
             style={{ fontVariantNumeric: 'tabular-nums' }}
@@ -78,7 +63,7 @@ export function DiffPanel({
             <p className="text-[11px] font-semibold tracking-[0.88px] text-ink-3">UNCHANGED</p>
             {unchanged.map((k) => (
               <div key={k} className="flex items-start justify-between text-[13px]">
-                <span className="text-ink-2">{LABELS[k]}</span>
+                <span className="text-ink-2">{paramDisplay(k).label}</span>
                 <span
                   className="font-medium text-ink"
                   style={{ fontVariantNumeric: 'tabular-nums' }}

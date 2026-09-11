@@ -1,5 +1,5 @@
 import type { Params } from './engine';
-import { money, percent } from './format';
+import { count, money, percent } from './format';
 
 /**
  * The five sliders. `customers` is deliberately not one of them (SPEC 2 says five): how many
@@ -120,3 +120,26 @@ export function resolveSliders(p: Params): SliderSpec[] {
     return { ...s, max };
   });
 }
+
+export type ParamDisplay = { label: string; format: (v: number) => string };
+
+/** `customers` is not a slider (SPEC 2 says five), so it has no SliderSpec to borrow from. */
+const CUSTOMERS_DISPLAY: ParamDisplay = { label: 'Customers today', format: count };
+
+/**
+ * How any of the six params is labelled and formatted.
+ *
+ * Sliders carry their own; customers is the odd one out, and every place that shows all six
+ * together — the diff panel, and anything like it later — was rebuilding its own merged map
+ * with a cast to paper over the missing key. One function instead, and no cast.
+ */
+export function paramDisplay(key: keyof Params): ParamDisplay {
+  const slider = SLIDERS.find((s) => s.key === key);
+  return slider ? { label: slider.label, format: slider.format } : CUSTOMERS_DISPLAY;
+}
+
+/** All six in display order: the fact about your business first, then the levers. */
+export const ALL_PARAM_KEYS: (keyof Params)[] = [
+  'customers',
+  ...SLIDERS.map((s) => s.key),
+];

@@ -15,7 +15,7 @@ pnpm test         # vitest run. Offline only: never calls the API, safe in CI.
 pnpm test:watch
 pnpm eval:parse   # the live extraction eval. Needs ANTHROPIC_API_KEY. ~13 Haiku calls,
                   # well under a cent. Skipped by `pnpm test` so it never runs by accident.
-pnpm build        # must pass before any deploy
+pnpm build        # must pass before any deploy. See docs/DEPLOY.md for the checklist.
 pnpm lint
 ```
 
@@ -24,7 +24,9 @@ pnpm lint
 **If a feature does not increase the chance that a link-opener forks, it does not go in v0.**
 
 Out of scope, deliberately: accounts, auth, any database, predictions/resolution/calibration,
-Monte Carlo or uncertainty bands, verticals beyond SaaS runway, saved model libraries.
+Monte Carlo or uncertainty bands, verticals beyond SaaS runway, saved model libraries. Each
+one is written up in `TODOS.md` with why it was left out and what should change the answer —
+if it is not in that file it is not deferred, it is forgotten.
 
 Mobile is **no longer** deferred. SPEC 2 put it off on the reasoning that desktop comes
 first, but the kill metric counts strangers arriving from X, and most of them are on a
