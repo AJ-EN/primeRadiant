@@ -158,7 +158,22 @@ the horizon, so the whole horizon is one constant: `DEFAULT_MONTHS` in `lib/engi
 
 ## The kill metric
 
-Fork rate = `slider_moved` / `link_opened`, among sessions that arrived via a shared link.
-Events: `model_created`, `link_opened`, `slider_moved` (first move per session), `fork_saved`.
-Above 15% build phase 2. 5-15% rewrite the framing once. Under 5% kill it.
+**`docs/MEASUREMENT.md` is the pre-registered plan. Read it before touching anything in
+`lib/analytics.ts`, and before looking at a single number.**
+
+```
+interaction rate = slider_moved / link_opened     (per tab, per model)
+```
+
+SPEC 10 calls this fork rate. It is not one: `slider_moved` is a drag, not a share. The
+honest name is interaction rate, and `fork_saved` is the lower-volume but truer signal.
+
+Events: `model_created`, `link_opened`, `slider_moved`, `fork_saved`, `clarifier_shown`,
+`parse_failed`. Every one carries `run: MEASUREMENT_RUN`. Bump that constant whenever a change
+could move the funnel, and never pool a sample across two runs.
+
+Floor of 100 qualifying inbound opens before the number means anything — that is where the
+95% interval first separates the 5% and 15% thresholds, not a round figure. Judge on the
+interval, never the point estimate.
+
 Analytics is a thin adapter in `lib/analytics.ts` and no-ops without a PostHog key.

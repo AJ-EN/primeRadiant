@@ -29,6 +29,16 @@ export type Event =
   /** The parse failed and the manual-entry fallback was shown. */
   | 'parse_failed';
 
+/**
+ * The measurement run this build belongs to. See docs/MEASUREMENT.md.
+ *
+ * Attached to every event so a sample can never be pooled across builds by accident. Bump it
+ * whenever something that could move the funnel changes: the composer, the model page, the
+ * slider panel, the analytics themselves, or a fix to any of them. A result computed across
+ * two different runs is not a result.
+ */
+export const MEASUREMENT_RUN = '2026-09-11-a';
+
 let started = false;
 
 export function initAnalytics() {
@@ -51,7 +61,7 @@ export function initAnalytics() {
 
 export function track(event: Event, props?: Record<string, unknown>) {
   if (!started) return;
-  posthog.capture(event, props);
+  posthog.capture(event, { ...props, run: MEASUREMENT_RUN });
 }
 
 /** Private mode and blocked storage throw on access; degrade to per-page-load instead. */
