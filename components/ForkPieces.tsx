@@ -28,9 +28,9 @@ export function AttributionStrip() {
   return (
     <div className="flex w-full flex-wrap items-center gap-2.5 rounded-[8px] border border-line bg-sunk px-4 py-2.5 text-[12px]">
       <span className="font-semibold tracking-[0.24px] text-ink">Shared model</span>
-      <span className="text-ink-3">·</span>
+      <span className="text-ink-faint">·</span>
       <span className="text-ink-2">you are editing your own copy</span>
-      <span className="text-ink-3">·</span>
+      <span className="text-ink-faint">·</span>
       <span className="text-ink-3">nothing you change here affects the original</span>
     </div>
   );

@@ -14,8 +14,25 @@
   --line-soft: #e7e7e3;
 
   --ink: #14140f;
-  --ink-2: #6b6b63;
-  --ink-3: #a3a39c;
+  /*
+   * The Figma ramp was ink #14140f / ink-2 #6b6b63 / ink-3 #a3a39c. ink-3 measured 2.30:1
+   * against the sunk card, well under the 4.5:1 AA floor, across 27 uses that are nearly all
+   * real text: chart axis labels, the character counter, eyebrow labels, and the line that
+   * tells people to argue with the assumptions.
+   *
+   * The lightest value that clears 4.5:1 on all three backgrounds is roughly #6f6f66, which
+   * is where ink-2 already sat, so fixing ink-3 alone would have collapsed a three-tone ramp
+   * into two. ink-2 moves darker to keep three visibly distinct steps. Worst-case ratios,
+   * measured against paper, surface and sunk: 16.8, 6.9, 4.6.
+   */
+  --ink-2: #54544c;
+  --ink-3: #6f6f66;
+  /*
+   * The old ink-3. Decoration and disabled states ONLY — separator glyphs and controls that
+   * are meant to read as unavailable, both of which WCAG 1.4.3 exempts. Never put text that
+   * carries meaning in this.
+   */
+  --ink-faint: #a3a39c;
 
   --accent: #0f6b5c;
   --accent-soft: #0f6b5c12;
@@ -38,6 +55,7 @@
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
   --color-ink-3: var(--ink-3);
+  --color-ink-faint: var(--ink-faint);
   --color-accent: var(--accent);
   --color-danger: var(--danger);
   --color-ghost: var(--ghost);

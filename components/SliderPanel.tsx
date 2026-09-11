@@ -82,7 +82,7 @@ export default function SliderPanel({ params, sliders, onChange, changed, onRese
           type="button"
           onClick={onReset}
           disabled={changedCount === 0}
-          className="cursor-pointer text-[13px] font-medium text-accent disabled:cursor-default disabled:text-ink-3"
+          className="cursor-pointer text-[13px] font-medium text-accent disabled:cursor-default disabled:text-ink-faint"
         >
           Reset to original
         </button>

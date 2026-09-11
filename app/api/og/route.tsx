@@ -22,8 +22,9 @@ const PLOT_H = 170;
 
 const PAPER = '#fafaf8';
 const INK = '#14140f';
-const INK_2 = '#6b6b63';
-const INK_3 = '#a3a39c';
+const INK_2 = '#54544c';
+/** Separator glyphs only, matching --ink-faint. Never text that carries meaning. */
+const INK_FAINT = '#a3a39c';
 const ACCENT = '#0f6b5c';
 const DANGER = '#c2410c';
 
@@ -167,7 +168,7 @@ export async function GET(req: Request) {
         <div style={{ display: 'flex', alignItems: 'center', fontSize: 25, color: INK_2 }}>
           {card.facts.map((fact, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
-              {i > 0 && <span style={{ color: INK_3, padding: '0 16px' }}>·</span>}
+              {i > 0 && <span style={{ color: INK_FAINT, padding: '0 16px' }}>·</span>}
               <span>{fact}</span>
             </div>
           ))}
