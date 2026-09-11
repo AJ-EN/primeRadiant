@@ -5,7 +5,17 @@
 Type one sentence about your business, get a runnable cash model with sliders and a
 shareable link anyone can fork. Codename only — do not put "Prime Radiant" on a domain.
 
-Full product spec lives in `docs/SPEC.md`. This file is the operating manual.
+This file is the operating manual. The rest of the thinking lives next to the code, so a
+session that has never seen the conversation can still pick it up:
+
+| Where | What |
+|---|---|
+| `docs/SPEC.md` | the product spec: thesis, scope, the four outcome classes, what is deferred |
+| `docs/ARCHITECTURE.md` | the architecture review: cost model, failure modes, what breaks first |
+| `docs/URL-CONTRACT.md` | the frozen v1 wire contract. Read before touching schema or bounds |
+| `docs/MEASUREMENT.md` | the pre-registered measurement plan. Read before looking at a number |
+| `docs/DEPLOY.md` | pre-deploy and post-deploy checklist |
+| `TODOS.md` | everything deferred, with why, and what should change the answer |
 
 ## Commands
 
