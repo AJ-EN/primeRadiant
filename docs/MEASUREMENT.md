@@ -134,8 +134,101 @@ Stop, fix, and restart with a bumped `MEASUREMENT_RUN`:
 - Any evidence of forged events.
 - Fewer than 100 qualifying opens at the end of the window.
 
-## Still undecided
+## Distribution and the window — decided 2026-09-13
 
-The **window length** and its **start date** are not set here, because they are distribution
-decisions rather than measurement ones. SPEC 13 has been carrying them since before day one.
-Set both before the first public post, and write them in this file.
+The last two open fields (SPEC 13.2, TODOS D1 and D2). Recorded before any data exists, which
+is the only time they can be set honestly.
+
+### The split, and why there is one
+
+TODOS D1 asked one question — "where does the first post go" — that turned out to be two.
+*Where the first post goes* and *where the measurement run happens* are the same event only if
+you already have an audience. Starting cold they cannot be, and it is not close.
+
+The denominator is filled **exclusively** by strangers opening a `/m?d=` link somebody else
+authored. `ModelClient.tsx` fires `model_created` when the tab authored the model and
+`link_opened` only when it did not, so visitors who arrive at `/` and build their own model
+never enter the denominator, however many of them there are. **A post that sends people to the
+homepage measures nothing.** A post must carry a model link.
+
+Working back from the floor, with no audience:
+
+| Step | Estimate |
+|---|---|
+| Impressions, cold X link post | a few hundred at best |
+| Clicks at 1–3% | 3–20 |
+| Qualifying, after blocking and pre-hydration bounce (≈ ×0.6) | **under 15** |
+| Floor required | **100** |
+
+The multipliers are estimates, not measurements. The gap is 10×, so the conclusion survives
+any defensible correction to them. The fork loop does not close it either: it is a
+*tail-sampling* mechanism — it pays when an opener who already has reach forks and reposts —
+and from a seed of ten opens that tail is essentially never sampled. It multiplies traffic; it
+cannot create it.
+
+So the first post ships as a **pilot**, and the kill-metric run stays unspent.
+
+### D1a. The pilot — decided
+
+**Channel:** X, one post carrying a model link (not the homepage), authored by us.
+**Run id:** `2026-09-13-pilot` in `lib/analytics.ts`.
+
+**What it is for** — proving the instrument, which ARCHITECTURE §3F asks for and DEPLOY's
+day-one section already half-specifies:
+
+- events arrive in PostHog at all, carrying `run`
+- `link_opened` fires for a stranger and does not fire for us
+- `$current_url` shows `d=redacted`
+- the unfurl carries the verdict headline, not the generic card
+- somebody who is not us moves a slider at least once
+
+**What it is not for:** the kill decision. No interaction rate computed on pilot data enters
+the decision rule above, at any n. Pilot events carry a `-pilot` run id so they cannot be
+pooled with the real run even by accident.
+
+### D1b. The measurement channel — still open, and now gated
+
+**Gate:** the run does not start until a channel exists that can plausibly deliver ~170
+stranger clicks on model links, which is what n=100 costs at the multipliers above.
+
+| Route | What it preserves | What it costs |
+|---|---|---|
+| Borrow reach — someone with an audience posts a model | Sample stays cold, so 5%/15% stay valid as derived | Depends on an ask landing; not under our control |
+| Seeded outreach — personalised models sent directly | Fully under our control; highest response rate | ~300–500 sends for n=100, **and the thresholds stop being valid** |
+| Build an audience first | Everything | Weeks to months |
+
+**If seeding becomes the channel, the thresholds must be re-derived before any data arrives.**
+5% and 15% were set against cold strangers. Somebody sent a model of their own business forks
+at a much higher rate, so clearing 15% on a seeded sample would trigger "build phase 2" on a
+sample that was never comparable. Re-deriving *after* seeing the number is the exact failure
+this document exists to prevent.
+
+Do not pool routes. If more than one is used, segment by channel and report separately.
+
+### D2. The window — decided
+
+**Run until 100 qualifying inbound opens, hard cap 14 days. The clock starts at the first
+public post of the measurement run** — not at deploy, and not at the pilot.
+
+- **n-gated rather than fixed length,** because the floor is what makes the interval readable.
+  A fixed window ending at n=60 produces nothing this document can interpret.
+- **Capped at 14 days,** because the cap is not arbitrary: TODOS T-A and ARCHITECTURE §5 both
+  say a run longer than two weeks means moving rate limiting to Vercel KV. Fourteen days is the
+  boundary that lets T-A stay accepted debt instead of silently becoming work.
+- **Clock starts at the first public post,** because DEPLOY's day-one checks and ARCHITECTURE
+  §3F both require verifying the funnel on our own traffic first, and this document already
+  discards five minutes around every deploy. Starting at deploy spends window on our own
+  verification traffic.
+
+**If the cap is reached below n=100, the answer is already written: "not enough data, keep
+distributing."** That is not a disappointing result to be reinterpreted — it is the
+pre-registered outcome, and the decision rule is not consulted.
+
+### Own-device exclusion — decided
+
+Exclusion 1 above offered a choice between opting our own browsers out of PostHog and
+filtering our `distinct_id` afterwards. **Do both.** They fail in different ways: an opt-out is
+per browser and dies when storage is cleared or another device is used; a `distinct_id` filter
+depends on having noted the id before the run. Belt and braces costs nothing, and the failure
+guarded against is our own traffic sitting in the denominator of a 100-open sample, where a
+dozen sessions move the point estimate by several points.

@@ -22,9 +22,11 @@ deployment. There is no state to migrate back.
 - [ ] `pnpm test` passes. 115 offline tests, no network.
 - [ ] `pnpm eval:parse` run once against the real key. This is the only check that the
       extraction actually works; everything else tests the fallback.
-- [ ] Read `docs/MEASUREMENT.md` and set the window length and start date.
-- [ ] Opt your own browsers out of PostHog, or note your `distinct_id` to filter later.
-      Decide before launch, not after seeing the number.
+- [ ] Read `docs/MEASUREMENT.md`. The channel and window are decided; confirm you are shipping
+      the **pilot** (run id ends `-pilot`) and are not starting the measurement run. The first
+      post must carry a model link, never the homepage — a homepage post fills no denominator.
+- [ ] Opt your own browsers out of PostHog **and** note your `distinct_id`. Decided in
+      `docs/MEASUREMENT.md`: do both, because they fail in different ways.
 
 ## First five minutes after deploy
 

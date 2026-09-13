@@ -36,8 +36,15 @@ export type Event =
  * whenever something that could move the funnel changes: the composer, the model page, the
  * slider panel, the analytics themselves, or a fix to any of them. A result computed across
  * two different runs is not a result.
+ *
+ * The `-pilot` suffix is load-bearing, not decoration. Starting cold, the first public post
+ * cannot reach the 100-open floor — so it ships as a pilot that proves the instrument, and
+ * the kill-metric run stays unspent until a channel exists that can fill the denominator.
+ * Pilot events must never be pooled with that run, and a distinct id is what makes that
+ * structural rather than a thing somebody has to remember. Bump to a plain dated id when the
+ * real run starts (D1b in docs/MEASUREMENT.md).
  */
-export const MEASUREMENT_RUN = '2026-09-11-a';
+export const MEASUREMENT_RUN = '2026-09-13-pilot';
 
 let started = false;
 

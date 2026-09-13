@@ -11,17 +11,28 @@ follows is explicitly gated on the measurement result.
 
 ## Blocked on a decision, not on code
 
-### D1. Distribution: where the first post goes, and to whom
-**Why it matters:** the measurement is only meaningful if shared links reach people who are
-not you. This has been open since before day one (SPEC 13) and is now the single thing
-standing between a finished build and a result.
-**Priority:** P1. **Blocks:** the entire measurement run.
+### D1. Distribution — split, and half-resolved 2026-09-13
+Split into two decisions in `docs/MEASUREMENT.md`, because "where the first post goes" and
+"where the run happens" are the same event only if you already have an audience.
 
-### D2. Measurement window: length and start date
-**Why:** `docs/MEASUREMENT.md` is pre-registered except for these two fields, deliberately,
-because they are distribution decisions. Set both before the first public post and write them
-into that file.
-**Priority:** P1. **Blocks:** reading the result honestly.
+**D1a, decided:** the first X post ships as a *pilot* that proves the instrument, not as the
+measurement run. It must carry a model link, never the homepage — the denominator is filled
+only by strangers opening a `/m?d=` link somebody else authored, so a homepage post measures
+nothing however much traffic it brings.
+
+**D1b, still open:** the measurement channel itself. **Gate:** the run does not start until a
+channel can plausibly deliver ~170 stranger clicks on model links, which is what the 100-open
+floor costs. The three routes and their trade-offs are in `docs/MEASUREMENT.md` — note that
+choosing seeded outreach invalidates the 5%/15% thresholds and requires re-deriving them
+*before* any data arrives.
+**Priority:** P1. **Blocks:** the measurement run. No longer blocks shipping.
+
+### D2. Measurement window — decided 2026-09-13
+Run to 100 qualifying inbound opens, hard cap 14 days, clock starting at the first public post
+of the measurement run (not at deploy, not at the pilot). Written into `docs/MEASUREMENT.md`
+with the reasoning.
+**Note:** the 14-day cap is what keeps T-A below its upgrade trigger. Extending the window past
+two weeks is not free — it picks up the KV migration.
 
 ### D3. Domain, and the rename
 **Why:** "Prime Radiant" is a codename. SPEC 13 says do not put it on a domain, and do not
