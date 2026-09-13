@@ -2,18 +2,34 @@ import { describe, it, expect } from 'vitest';
 import { extractFromSentence } from './extract';
 import { PARSE_CASES, gradeCase } from './parse-cases';
 import { PARAM_KEYS } from './engine';
+import { evalGate } from './eval-gate';
 
 /**
  * The live half of T12. Costs money, so it never runs by accident.
  *
- *   pnpm eval:parse        (needs ANTHROPIC_API_KEY)
+ *   pnpm eval:parse        (reads ANTHROPIC_API_KEY from .env.local)
  *
  * `pnpm test` skips this entirely. Everything the parse path does *without* the network is
  * covered offline in parse.test.ts and parse-cases.test.ts, which is what runs in CI.
  *
  * Roughly 13 calls at Haiku rates, well under a cent per run.
  */
-const LIVE = Boolean(process.env.ANTHROPIC_API_KEY) && process.env.RUN_LIVE_EVAL === '1';
+const gate = evalGate(process.env);
+const LIVE = gate.kind === 'run';
+
+/**
+ * Requested but not runnable. This has to be a *failing test* rather than a skip: the command
+ * exiting 0 with 13 skips is exactly what let docs/DEPLOY.md's "the only check that the
+ * extraction actually works" get ticked without anything being checked.
+ */
+if (gate.kind === 'fail') {
+  const { message } = gate;
+  describe('live eval requested but not runnable', () => {
+    it('refuses to pass without ANTHROPIC_API_KEY', () => {
+      throw new Error(message);
+    });
+  });
+}
 
 const CANONICAL =
   '18k in the bank, 9.5k a month burn, 12 customers paying 400, about 8% churn, 2 new customers a month';

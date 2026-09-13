@@ -23,8 +23,11 @@ session that has never seen the conversation can still pick it up:
 pnpm dev          # next dev (turbopack)
 pnpm test         # vitest run. Offline only: never calls the API, safe in CI.
 pnpm test:watch
-pnpm eval:parse   # the live extraction eval. Needs ANTHROPIC_API_KEY. ~13 Haiku calls,
-                  # well under a cent. Skipped by `pnpm test` so it never runs by accident.
+pnpm eval:parse   # the live extraction eval. Reads ANTHROPIC_API_KEY from .env.local, which
+                  # vitest.config.ts loads. ~13 Haiku calls, well under a cent. Skipped by
+                  # `pnpm test` so it never runs by accident — but if you ask for it and the
+                  # key is missing it FAILS rather than skipping: a skipped run exits 0 and
+                  # ticks the DEPLOY.md gate without having tested anything.
 pnpm build        # must pass before any deploy. See docs/DEPLOY.md for the checklist.
 pnpm lint
 ```

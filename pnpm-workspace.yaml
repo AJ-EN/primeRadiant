@@ -1,4 +1,8 @@
 allowBuilds:
-  core-js: set this to true or false
+  # core-js's postinstall only prints a funding banner; nothing in the build needs it. Left as
+  # an unresolved placeholder it made `pnpm test` die in preflight on ERR_PNPM_IGNORED_BUILDS
+  # before vitest ever started — and `pnpm test` is a pre-deploy gate in CLAUDE.md and
+  # docs/DEPLOY.md, so that gate was passing by not running.
+  core-js: false
   sharp: false
   unrs-resolver: false
